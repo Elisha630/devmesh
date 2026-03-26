@@ -586,8 +586,10 @@ class DevMeshServer:
 
     async def _lock_request(self, data: Dict) -> Dict:
         model, target = data.get("model", "?"), data.get("target")
-        try:    lt = LockType(data.get("type", "read"))
-        except: return {"event": "lock_denied", "reason": "invalid_lock_type", "target": target}
+        try:
+            lt = LockType(data.get("type", "read"))
+        except ValueError:
+            return {"event": "lock_denied", "reason": "invalid_lock_type", "target": target}
         if not target:
             return {"event": "lock_denied", "reason": "no_target"}
         if model not in self.agents or self.agents[model].status == "suspended":
@@ -1173,8 +1175,8 @@ class DevMeshServer:
         try:
             async for msg in ws:
                 await self._handle_agent_message(ws, msg)
-        except Exception:
-            pass
+        except Exception as e:
+            log.error(f"Error in agent handler for {getattr(ws, '_agent_id', 'unknown')}: {e}")
         finally:
             self.agent_clients.discard(ws)
             aid = getattr(ws, "_agent_id", None)
@@ -1427,6 +1429,8 @@ class DevMeshServer:
                 hw_task.cancel()
                 monitor_task.cancel()
                 self._shutdown_launched_agents()
+                # Gracefully close storage
+                self.storage.close()
                 if self.http_server:
                     self.http_server.shutdown()
     

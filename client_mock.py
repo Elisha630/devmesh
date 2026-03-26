@@ -10,6 +10,15 @@ import websockets
 HOST = "127.0.0.1"
 PORT = 7700
 
+# Use config for consistency
+try:
+    from config import get_server_config
+    _cfg = get_server_config()
+    HOST = _cfg.ws_host
+    PORT = _cfg.ws_port
+except ImportError:
+    pass  # Fall back to defaults if config not available
+
 
 class MockClient:
     def __init__(self, model: str, resources: Dict):

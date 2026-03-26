@@ -5,6 +5,15 @@ Centralized configuration for DevMesh server and agents.
 Supports environment variables and config files.
 """
 
+__all__ = [
+    "ServerConfig",
+    "AgentConfig",
+    "KNOWN_CLI_TOOLS",
+    "TOOL_PROFILES",
+    "get_server_config",
+    "get_agent_config",
+]
+
 import os
 from pathlib import Path
 from dataclasses import dataclass

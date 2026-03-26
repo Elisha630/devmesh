@@ -4,6 +4,27 @@ DevMesh Error Handling
 Custom exception hierarchy for better error management.
 """
 
+__all__ = [
+    "DevMeshError",
+    "AgentError",
+    "AgentNotRegistered",
+    "AgentSuspended",
+    "LockError",
+    "LockConflict",
+    "LockTimeout",
+    "TaskError",
+    "TaskNotFound",
+    "TaskStateError",
+    "DependencyError",
+    "ToolError",
+    "ToolNotFound",
+    "ToolInvokeError",
+    "ResourceError",
+    "InsufficientResources",
+    "ConfigError",
+    "InvalidConfiguration",
+]
+
 
 class DevMeshError(Exception):
     """Base exception for all DevMesh errors."""

@@ -5,6 +5,12 @@ Structured logging with file and console output.
 Replaces scattered print() statements.
 """
 
+__all__ = [
+    "ColoredFormatter",
+    "setup_logging",
+    "get_logger",
+]
+
 import logging
 import sys
 from pathlib import Path
