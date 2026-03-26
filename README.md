@@ -1,5 +1,9 @@
 # DevMesh — Multi-Agent Orchestration Framework
 
+[![Tests](https://img.shields.io/badge/tests-13%20passed-brightgreen)]()
+[![Python](https://img.shields.io/badge/python-3.12+-blue)]()
+[![License](https://img.shields.io/badge/license-MIT-green)]()
+
 ## 🎯 Overview
 
 DevMesh is a local multi-agent orchestration system that coordinates multiple AI CLI tools (Claude, Gemini, Ollama, etc.) to work together on tasks. It provides:
@@ -9,38 +13,55 @@ DevMesh is a local multi-agent orchestration system that coordinates multiple AI
 - **Lock Management** — READ/WRITE/INTENT/CO_WRITE semantics for safe collaboration
 - **Hardware Throttling** — Resource limits (GPU/RAM) enforced per agent
 - **Audit Logging** — Complete event history for debugging and compliance
+- **Configuration Management** — Environment-based settings with validation
+- **Structured Logging** — Color-coded console output with optional file logging
 
 ## 📁 Project Structure
 
 ```
-DevMesh/
-├── server.py              # Main orchestration server
+.
+├── server.py              # Main orchestration server (WebSocket + HTTP)
 ├── agent_bridge.py        # CLI tool wrapper (registers agents with server)
-├── client_mock.py         # Test client for development
+├── client_mock.py         # Test client for development/testing
 ├── dashboard.html         # Web UI (static asset, served by server)
-├── config.py              # Configuration management (NEW)
-├── logger.py              # Structured logging (NEW)
-├── errors.py              # Custom exception hierarchy (NEW)
+├── config.py              # Configuration management & validation
+├── logger.py              # Structured logging with colored output
+├── errors.py              # Custom exception hierarchy
+├── storage.py             # In-memory storage with audit logging
+├── check_tools.py         # Utility to verify available CLI tools
+├── requirements.txt       # Python dependencies
+├── tests/
+│   └── test_core.py       # Unit tests
 └── .devmesh/
     └── audit.jsonl        # Event audit log
 ```
 
 ## 🚀 Quick Start
 
-### Server
+### Prerequisites
+
+- Python 3.12+
+- Install dependencies: `pip install -r requirements.txt`
+
+### Start the Server
 ```bash
-cd DevMesh
 python server.py
 ```
-Opens browser at `http://127.0.0.1:7701`
-
-### Connect an Agent
-```bash
-python agent_bridge.py --tool claude --ws ws://127.0.0.1:7700
-```
+The dashboard will automatically open at `http://127.0.0.1:7701`
 
 ### Available Tools
-- `claude`, `gemini`, `codex`, `aider`, `continue`, `cody`, `cursor`, `ollama`, `sgpt`, `gh`
+
+DevMesh supports the following AI CLI tools:
+- `claude` — Anthropic Claude
+- `gemini` — Google Gemini
+- `codex` — OpenAI Codex
+- `aider` — Aider pair programming
+- `continue` — Continue IDE extension
+- `cody` — Sourcegraph Cody
+- `cursor` — Cursor IDE
+- `ollama` — Local LLM runner
+- `sgpt` — Shell GPT
+- `gh` — GitHub Copilot CLI
 
 ## ⚙️ Configuration
 
@@ -90,44 +111,54 @@ QUEUED → CLAIMED → WORKING → COMPLETED
               FAILED/ABANDONED
 ```
 
-## 🔧 Improvements (Recent)
+## 🔧 Core Components
 
 ### Configuration Management (`config.py`)
-- **Centralized settings** — No hardcoded values
-- **Environment variables** — Override any setting without code changes
-- **Validation** — Automatic configuration validation
-- **Shared tool definitions** — Single source of truth for CLI tools
+- **Centralized settings** — All configuration in one place
+- **Environment variables** — Override any setting via `DEVMESH_*` env vars
+- **Validation** — Automatic validation (e.g., port range 1-65535)
+- **Type hints** — Full type annotations for IDE support
 
 ### Structured Logging (`logger.py`)
-- **Color-coded console output** — Easy on the eyes in development
-- **Optional file logging** — For production debugging
+- **Color-coded console output** — Easy to read during development
+- **Optional file logging** — Persist logs for production debugging
 - **Configurable levels** — DEBUG, INFO, WARNING, ERROR, CRITICAL
-- **Replaces scattered print()** — Better trace and profiling
+- **Contextual info** — Timestamps, module names, and log levels
 
 ### Error Handling (`errors.py`)
-- **Custom exception hierarchy** — Specific errors for each domain
-- **Structured error responses** — JSON-serializable error details
-- **Better debugging** — Error codes, context, and suggested actions
+- **Custom exception hierarchy** — `DevMeshError` base class with specific subclasses
+- **Structured error responses** — JSON-serializable with error codes
+- **Better debugging** — Context, suggestions, and stack traces
 
-### Dashboard Extraction
-- **Separated HTML from server code** — Easier maintenance
-- **Cleaner server logic** — ~200 fewer lines in server.py
-- **Can be cached/versioned** — Static asset instead of generated
+### Storage Layer (`storage.py`)
+- **In-memory storage** — Fast access for agents, tasks, and locks
+- **Audit logging** — All events written to `.devmesh/audit.jsonl`
+- **Thread-safe operations** — Safe concurrent access
+
+### Dashboard (`dashboard.html`)
+- **Real-time updates** — WebSocket-driven live visualization
+- **Task management** — Create, monitor, and manage tasks
+- **Lock visualization** — See which agents hold which locks
+- **Agent status** — Monitor connected agents and their resources
 
 ## 🎓 Design Patterns
 
 ### Rulebook (Rules 1-10)
+
 DevMesh enforces a set of rules to ensure safe multi-agent collaboration:
 
-1. **Framework Authority** — First agent becomes ARCHITECT
-3. **No Task Assignment** — Agents bid fairly; server arbitrates
-4. **Lock Hierarchy** — INTENT → WRITE → READ with clear semantics
-5. **Heartbeat Obligation** — Keep-alive signals or auto-release lock
-6. **Critic Requirement** — Code review by second agent if flagged
-7. **Hardware Throttle** — Respect GPU/RAM limits globally
-8. **Read Before Work** — Non-ARCHITECT agents read framework first
-9. **Diff-Based Writes** — Track file changes, prevent duplicates
-10. **Pub/Sub File Events** — Real-time change notifications
+| # | Rule | Description |
+|---|------|-------------|
+| 1 | **Framework Authority** | First agent becomes ARCHITECT |
+| 2 | **No Task Assignment** | Agents bid fairly; server arbitrates |
+| 3 | **Lock Hierarchy** | INTENT → WRITE → READ with clear semantics |
+| 4 | **Heartbeat Obligation** | Keep-alive signals or auto-release lock |
+| 5 | **Critic Requirement** | Code review by second agent if flagged |
+| 6 | **Hardware Throttle** | Respect GPU/RAM limits globally |
+| 7 | **Read Before Work** | Non-ARCHITECT agents read framework first |
+| 8 | **Diff-Based Writes** | Track file changes, prevent duplicates |
+| 9 | **Pub/Sub File Events** | Real-time change notifications |
+| 10 | **Single Source of Truth** | Server is authoritative state holder |
 
 ## 📈 TODO / Future Work
 
@@ -144,7 +175,12 @@ DevMesh enforces a set of rules to ensure safe multi-agent collaboration:
 
 ## 🧪 Testing
 
-Run mock client for development:
+Run the test suite:
+```bash
+pytest tests/ -v
+```
+
+Run mock clients for development:
 ```bash
 python client_mock.py --model architect
 python client_mock.py --model agent1
@@ -152,11 +188,34 @@ python client_mock.py --model agent1
 
 ## 📝 License
 
-MIT
+MIT License — See [LICENSE](LICENSE) for details.
 
 ## 🤝 Contributing
 
-1. Follow PEP 8 style guidelines
-2. Add type hints to new functions
-3. Update README with significant changes
-4. Ensure logging replaces print() statements
+Contributions are welcome! Please follow these guidelines:
+
+1. **Code Style** — Follow PEP 8 style guidelines
+2. **Type Hints** — Add type annotations to all new functions
+3. **Documentation** — Update README with significant changes
+4. **Logging** — Use the `logger` module instead of `print()` statements
+5. **Testing** — Add tests for new functionality in `tests/test_core.py`
+6. **Commit Messages** — Write clear, descriptive commit messages
+
+### Development Workflow
+
+```bash
+# Clone and setup
+git clone <repository-url>
+cd DevMesh
+pip install -r requirements.txt
+
+# Run tests
+pytest tests/ -v
+
+# Run server
+python server.py
+
+# Connect test agents
+python client_mock.py --model architect
+python client_mock.py --model agent1
+```
