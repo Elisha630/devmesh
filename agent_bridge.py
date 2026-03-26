@@ -369,7 +369,7 @@ class AgentBridge:
         mem = json.dumps(mem_compact, separators=(",", ":"), ensure_ascii=False)
         roster = json.dumps(self.roster or {}, separators=(",", ":"), ensure_ascii=False)
         
-        prompt = (
+        full_prompt = (
             "<devmesh_context>\n"
             f"tool: {self.tool_name}\n"
             f"role: {self.role or 'agent'}\n"
@@ -407,7 +407,7 @@ class AgentBridge:
                     stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                 )
                 stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(input=prompt.encode()), timeout=timeout_sec
+                    proc.communicate(input=full_prompt.encode()), timeout=timeout_sec
                 )
             else:
                 proc = await asyncio.create_subprocess_exec(
