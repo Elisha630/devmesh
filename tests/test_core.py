@@ -117,7 +117,6 @@ class TestConfigValidation:
         assert cfg.lock_ttl_sec == 15
     
     def test_server_config_invalid_port(self):
-        from config import ServerConfig
         import os
         import sys
         
@@ -129,6 +128,8 @@ class TestConfigValidation:
             # Force reimport to pick up new environment variable
             if 'config' in sys.modules:
                 del sys.modules['config']
+            
+            from config import ServerConfig
             
             with pytest.raises(ValueError):
                 ServerConfig()
