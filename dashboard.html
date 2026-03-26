@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DevMesh Registry</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;800&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#090b0e;--surf:#111418;--bdr:#1c2330;--bdr2:#263040;
+  --tx:#c4ccda;--mu:#485a70;
+  --gr:#3af0a0;--bl:#3ab8f0;--ye:#f0c03a;--re:#f0405a;--pu:#a78bfa;
+  --glow:0 0 18px rgba(58,240,160,.18);
+  --fm:'Syne',sans-serif;--fc:'JetBrains Mono',monospace;
+}
+html,body{height:100%;overflow:hidden}
+body{
+  background:var(--bg);color:var(--tx);
+  font-family:var(--fc);font-size:12.5px;line-height:1.55;
+  display:grid;
+  grid-template-rows:52px 1fr;
+  grid-template-columns:252px 1fr 300px;
+}
+/* HEADER */
+header{
+  grid-column:1/-1;background:var(--surf);
+  border-bottom:1px solid var(--bdr);
+  display:flex;align-items:center;padding:0 18px;gap:14px;
+}
+.logo{font-family:var(--fm);font-weight:800;font-size:17px;color:var(--gr);letter-spacing:-.5px}
+.logo em{color:var(--mu);font-style:normal;font-weight:400}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--gr);box-shadow:0 0 8px var(--gr);animation:p 1.8s infinite}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.3}}
+.hstats{margin-left:auto;display:flex;gap:18px;font-size:11px;color:var(--mu)}
+.hstats b{color:var(--tx)}
+/* PANELS */
+#lp{background:var(--surf);border-right:1px solid var(--bdr);overflow-y:auto;display:flex;flex-direction:column}
+#cp{display:flex;flex-direction:column;overflow:hidden}
+#rp{background:var(--surf);border-left:1px solid var(--bdr);display:flex;flex-direction:column;overflow:hidden}
+.sec{border-bottom:1px solid var(--bdr);padding:13px 15px}
+.sec-t{
+  font-family:var(--fm);font-size:9.5px;font-weight:600;
+  letter-spacing:1.6px;text-transform:uppercase;color:var(--mu);
+  margin-bottom:9px;display:flex;align-items:center;justify-content:space-between;
+}
+.badge{background:var(--bdr2);border-radius:4px;padding:1px 6px;font-size:10px;color:var(--tx)}
+/* AGENT CARD */
+.ac{background:var(--bg);border:1px solid var(--bdr);border-radius:6px;padding:9px 11px;margin-bottom:5px}
+.ac-h{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.an{font-family:var(--fm);font-weight:700;font-size:11.5px;color:#fff;flex:1}
+.rb{font-size:9px;padding:2px 5px;border-radius:3px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.rba{background:rgba(58,240,160,.14);color:var(--gr)}
+.rbg{background:rgba(58,184,240,.14);color:var(--bl)}
+.am{font-size:10.5px;color:var(--mu);padding-left:13px}
+/* HW */
+.hw{margin-bottom:7px}
+.hwl{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mu);margin-bottom:3px}
+.hwl span{color:var(--tx)}
+.hwb{height:3px;background:var(--bdr2);border-radius:2px;overflow:hidden}
+.hwf{height:100%;border-radius:2px;background:var(--gr);transition:width .5s}
+.hwf.w{background:var(--ye)}.hwf.c{background:var(--re)}
+/* TOOLS */
+.ti{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--bdr);font-size:11px}
+.ti:last-child{border:none}
+.tn{font-weight:600;color:var(--tx);flex:1}
+.tv{color:var(--mu);font-size:9.5px}
+/* TASKS */
+#task-list{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:7px}
+.tr{
+  background:var(--surf);border:1px solid var(--bdr);border-radius:6px;
+  padding:9px 13px;display:grid;
+  grid-template-columns:1fr 86px;align-items:center;gap:10px;
+  transition:border-color .2s;
+}
+.tr:hover{border-color:var(--bdr2)}
+.tid{font-family:var(--fc);font-weight:700;font-size:9px;color:var(--mu)}
+.tdesc{font-size:11.5px;color:var(--tx);margin-bottom:2px}
+.tfile{font-size:9.5px;color:var(--mu);word-break:break-all}
+.ts{font-size:9.5px;padding:2px 7px;border-radius:4px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;text-align:center}
+.ts-queued{background:rgba(72,90,112,.2);color:var(--mu)}
+.ts-claimed{background:rgba(58,184,240,.14);color:var(--bl)}
+.ts-working{background:rgba(240,192,58,.14);color:var(--ye);animation:blink 1.2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.5}}
+.ts-paused{background:rgba(170,120,255,.14);color:var(--tx)}
+.ts-completed{background:rgba(58,240,160,.14);color:var(--gr)}
+.ts-failed,.ts-abandoned{background:rgba(240,64,90,.14);color:var(--re)}
+.town{font-size:9px;color:var(--mu);margin-top:4px}
+.empty{text-align:center;color:var(--mu);padding:38px 0;font-style:italic;font-size:12px}
+
+/* COMPLETED TASKS SIDEBAR */
+.cti{padding:8px 10px;border-bottom:1px solid var(--bdr);font-size:10.5px}
+.cti-h{display:flex;justify-content:space-between;margin-bottom:3px}
+.cti-id{color:var(--mu);font-size:9px}
+.cti-t{color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cti-m{color:var(--mu);font-size:9px}
+/* CHAT */
+.chat{border-top:1px solid var(--bdr);background:var(--surf);padding:13px 15px}
+.chat-t{font-family:var(--fm);font-size:9.5px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--mu);margin-bottom:9px}
+.msgs{max-height:130px;overflow-y:auto;margin-bottom:9px;display:flex;flex-direction:column;gap:3px}
+.msg{padding:5px 9px;border-radius:5px;font-size:11.5px;line-height:1.4}
+.msg.user{background:rgba(58,240,160,.07);border-left:2px solid var(--gr)}
+.msg.system{background:rgba(58,184,240,.05);border-left:2px solid var(--bl);color:var(--mu)}
+.cin-row{display:flex;gap:7px}
+#ci{
+  flex:1;background:var(--bg);border:1px solid var(--bdr2);border-radius:6px;
+  color:var(--tx);font-family:var(--fc);font-size:12.5px;padding:8px 11px;outline:none;
+  transition:border-color .2s,box-shadow .2s;
+}
+#ci:focus{border-color:var(--gr);box-shadow:var(--glow)}
+#ci::placeholder{color:var(--mu)}
+#sb{
+  background:var(--gr);color:#000;border:none;border-radius:6px;
+  font-family:var(--fm);font-weight:800;font-size:11px;
+  padding:0 16px;cursor:pointer;letter-spacing:.5px;transition:opacity .2s;
+}
+#sb:hover{opacity:.85}
+/* EVENT LOG */
+.rh{padding:13px 15px;border-bottom:1px solid var(--bdr);font-family:var(--fm);font-size:9.5px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--mu);display:flex;align-items:center;gap:8px}
+#el{flex:1;overflow-y:auto;padding:6px}
+.ei{padding:5px 8px;border-radius:4px;margin-bottom:2px;font-size:10.5px;line-height:1.4;border-left:2px solid transparent}
+.ei:hover{background:rgba(255,255,255,.025)}
+.ei-lg{border-color:var(--gr)}.ei-lr{border-color:var(--bdr2)}
+.ei-tc{border-color:var(--bl)}.ei-td{border-color:var(--gr)}
+.ei-ta{border-color:var(--re)}.ei-ar{border-color:var(--ye)}
+.ei-fc{border-color:var(--pu)}
+.ets{color:var(--mu);font-size:9.5px}
+.elb{color:var(--tx)}.emd{color:var(--bl)}
+/* scrollbars */
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px}
+/* banner */
+#banner{position:fixed;top:0;left:0;right:0;background:var(--re);color:#fff;text-align:center;padding:5px;font-size:11.5px;font-weight:700;z-index:99;display:none}
+/* FOLDER PICKER */
+#folder-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+#folder-modal.shown{display:flex}
+.folder-picker{background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;width:92%;max-width:560px;height:75vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.6)}
+.fp-header{padding:13px 16px;border-bottom:1px solid var(--bdr);display:flex;flex-direction:column;gap:7px;flex-shrink:0}
+.fp-title-row{display:flex;justify-content:space-between;align-items:center}
+.fp-title{font-family:var(--fm);font-weight:800;font-size:13px;color:var(--tx)}
+.fp-close{background:none;border:none;font-size:14px;color:var(--mu);cursor:pointer;padding:2px 5px;border-radius:3px;transition:background .15s,color .15s}
+.fp-close:hover{color:var(--re);background:rgba(240,64,90,.1)}
+.fp-breadcrumb{display:flex;align-items:center;flex-wrap:wrap;gap:1px;font-size:10.5px;min-height:17px;line-height:1.3}
+.fp-crumb{cursor:pointer;color:var(--bl);padding:1px 3px;border-radius:3px;transition:background .15s}
+.fp-crumb:hover{color:var(--gr);background:rgba(58,240,160,.08)}
+.fp-crumb-sep{color:var(--bdr2);padding:0 1px}
+.fp-crumb-cur{color:var(--tx);font-weight:600;padding:1px 3px}
+.fp-path-row{display:flex;gap:6px}
+#fp-path-input{flex:1;background:var(--bg);border:1px solid var(--bdr2);border-radius:5px;color:var(--tx);font-family:var(--fc);font-size:11px;padding:5px 9px;outline:none;transition:border-color .15s,box-shadow .15s}
+#fp-path-input:focus{border-color:var(--gr);box-shadow:0 0 0 2px rgba(58,240,160,.12)}
+.fp-go-btn{background:var(--bdr2);border:1px solid var(--bdr);color:var(--tx);border-radius:5px;padding:4px 11px;font-size:10px;font-family:var(--fc);cursor:pointer;font-weight:700;white-space:nowrap;transition:background .15s}
+.fp-go-btn:hover{background:var(--bdr)}
+.fp-list{flex:1;overflow-y:auto;padding:5px 7px}
+.fp-loading{color:var(--mu);font-size:11px;font-style:italic;padding:14px 9px}
+.fp-error{color:var(--re);font-size:11px;padding:14px 9px}
+.fi{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer;font-size:11.5px;color:var(--tx);transition:background .12s;user-select:none}
+.fi:hover{background:rgba(255,255,255,.04)}
+.fi.sel{background:rgba(58,240,160,.13);color:var(--gr)}
+.fi-badge{font-size:8.5px;font-weight:700;letter-spacing:.4px;padding:1px 5px;border-radius:3px;flex-shrink:0;width:32px;text-align:center}
+.fi-badge.dir{background:rgba(240,192,58,.15);color:var(--ye)}
+.fi-badge.file{background:rgba(72,90,112,.2);color:var(--mu)}
+.fi-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fi-meta{font-size:9.5px;color:var(--mu);flex-shrink:0}
+.fi-arr{color:var(--mu);font-size:11px;flex-shrink:0;transition:color .12s}
+.fi:hover .fi-arr{color:var(--gr)}
+.fp-footer{padding:10px 14px;border-top:1px solid var(--bdr);display:flex;align-items:center;gap:8px;flex-shrink:0}
+.fp-sel-path{flex:1;font-size:10px;color:var(--mu);font-family:var(--fc);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fp-sel-path b{color:var(--gr)}
+.fp-btn{background:var(--bdr2);color:var(--tx);border:1px solid var(--bdr);border-radius:5px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:700;font-family:var(--fc);transition:background .15s}
+.fp-btn:hover{background:var(--bdr)}
+.fp-btn.primary{background:var(--gr);color:#000;border-color:var(--gr)}
+.fp-btn.primary:hover{opacity:.85}
+.selected-folder{padding:7px 11px;background:rgba(58,240,160,.07);border:1px solid rgba(58,240,160,.22);border-radius:5px;margin-bottom:9px;font-size:11px;color:var(--gr)}
+.selected-folder-path{font-family:var(--fc);font-size:10px;color:var(--mu);word-break:break-all;margin-top:2px}
+</style>
+</head>
+<body>
+<div id="banner">⚠ Disconnected — reconnecting…</div>
+<div id="folder-modal">
+  <div class="folder-picker">
+    <div class="fp-header">
+      <div class="fp-title-row">
+        <div class="fp-title">Select Working Folder</div>
+        <button class="fp-close" onclick="closeFolderPicker()">&#x2715;</button>
+      </div>
+      <div class="fp-breadcrumb" id="fp-breadcrumb"></div>
+      <div class="fp-path-row">
+        <input id="fp-path-input" placeholder="Type any path and press Go or Enter" autocomplete="off"/>
+        <button class="fp-go-btn" onclick="fpGoToPath()">Go</button>
+      </div>
+    </div>
+    <div class="fp-list" id="fp-list"><div class="fp-loading">Loading...</div></div>
+    <div class="fp-footer">
+      <div class="fp-sel-path">Select: <b id="fp-sel-label">(none)</b></div>
+      <button class="fp-btn" onclick="closeFolderPicker()">Cancel</button>
+      <button class="fp-btn primary" onclick="confirmFolder()">Use This Folder</button>
+    </div>
+  </div>
+</div>
+<header>
+  <div class="logo">DevMesh <em>Registry</em></div>
+  <div class="pulse" id="dot"></div>
+  <div class="hstats">
+    <div>Agents <b id="sa">0</b></div>
+    <div>Tasks <b id="st">0</b></div>
+    <div>Locks <b id="sl">0</b></div>
+    <div style="color:var(--bdr2)">│</div>
+    <div>Agent WS <b>:7700</b></div>
+  </div>
+</header>
+
+<div id="lp">
+  <div class="sec">
+    <div class="sec-t">Connected Agents <span class="badge" id="ac">0</span></div>
+    <div id="al"><div style="color:var(--mu);font-style:italic;font-size:11px">Waiting for agents…</div></div>
+  </div>
+  <div class="sec">
+    <div class="sec-t">Hardware</div>
+    <div class="hw">
+      <div class="hwl">VRAM <span id="vt">0/16 GB</span></div>
+      <div class="hwb"><div class="hwf" id="vf" style="width:0%"></div></div>
+    </div>
+    <div class="hw">
+      <div class="hwl">RAM <span id="rt">0/32 GB</span></div>
+      <div class="hwb"><div class="hwf" id="rf" style="width:0%"></div></div>
+    </div>
+    <div style="margin-top:10px">
+      <div style="font-size:9px;color:var(--mu);margin-bottom:6px">Hardware Heatmap (recent)</div>
+      <canvas id="hw-heatmap" width="260" height="54" style="width:100%;background:rgba(0,0,0,.08);border:1px solid var(--bdr2);border-radius:8px"></canvas>
+    </div>
+  </div>
+  <div class="sec" style="flex:1">
+    <div class="sec-t">
+      Detected CLI Tools <span class="badge" id="tc">0</span>
+      <button onclick="rescan()" style="background:none;border:none;color:var(--mu);cursor:pointer;font-size:10px;font-family:var(--fc)">↻</button>
+    </div>
+    <div id="tl"><div style="color:var(--mu);font-style:italic;font-size:11px">Scanning…</div></div>
+  </div>
+</div>
+
+<div id="cp">
+  <div id="task-list"><div class="empty">No tasks yet — send one from the command center below.</div></div>
+  <div class="chat">
+    <div class="chat-t">▸ Task Command Center — broadcasts to all agents</div>
+    <div class="msgs" id="msgs"></div>
+    <div style="margin-bottom:10px">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <label style="font-size:9px;color:var(--mu);font-weight:700">📁 Working Directory</label>
+        <button onclick="openFolderPicker()" style="background:rgba(58,240,160,.15);border:1px solid rgba(58,240,160,.3);color:var(--gr);font-size:9px;padding:3px 8px;border-radius:4px;cursor:pointer;font-weight:700;transition:background .2s">Browse</button>
+      </div>
+      <div id="selected-folder" class="selected-folder" style="display:none">
+        <div>Selected:</div>
+        <div class="selected-folder-path" id="selected-folder-path">/tmp</div>
+      </div>
+    </div>
+    <div class="cin-row">
+      <input id="ci" type="text" placeholder="Describe a task for all agents… e.g. Build a REST API with JWT auth" autocomplete="off"/>
+      <button id="sb" onclick="send()">SEND</button>
+    </div>
+  </div>
+</div>
+
+<div id="rp">
+  <div class="rh">Knowledge Base (RAG)</div>
+  <div id="kl" style="padding:10px;font-size:10px;max-height:200px;overflow-y:auto;border-bottom:1px solid var(--bdr)">
+    <div style="color:var(--mu);font-style:italic">No discoveries shared yet…</div>
+  </div>
+  <div class="rh">Completed Tasks</div>
+  <div id="ctl" style="flex:1;overflow-y:auto;border-bottom:1px solid var(--bdr)">
+    <div style="padding:15px;color:var(--mu);font-style:italic;font-size:11px;text-align:center">No completed tasks.</div>
+  </div>
+  <div class="rh">Live Events <span class="badge" id="ec">0</span></div>
+  <div style="margin-top:6px;font-size:9px;color:var(--mu);display:flex;align-items:center;gap:8px">
+    <label style="cursor:pointer;user-select:none">
+      <input id="ev-show-raw" type="checkbox" style="transform:translateY(1px)" onchange="renderEvents()"/>
+      Show stdout/stderr
+    </label>
+  </div>
+  <div id="el"></div>
+</div>
+
+<script>
+const WS='ws://127.0.0.1:7702';
+let ws=null,S={agents:{},tasks:{},locks:{},hardware:{},hardware_history:[],detected_tools:[],chat_log:[],event_log:[]};
+const launchedTools=new Set();
+
+function conn(){
+  ws=new WebSocket(WS);
+  ws.onopen=()=>{
+    document.getElementById('banner').style.display='none';
+    document.getElementById('dot').style.background='var(--gr)';
+    ws.send(JSON.stringify({type:'get_state'}));
+  };
+  ws.onclose=()=>{
+    document.getElementById('banner').style.display='block';
+    document.getElementById('dot').style.background='var(--re)';
+    setTimeout(conn,2000);
+  };
+  ws.onerror=()=>{};
+  ws.onmessage=e=>{try{dispatch(JSON.parse(e.data))}catch(x){}};
+}
+
+function dispatch(m){
+  if(m.type==='state'){
+    if(m.agents)S.agents=m.agents;
+    if(m.tasks)S.tasks=m.tasks;
+    if(m.locks)S.locks=m.locks;
+    if('hardware' in m) S.hardware = m.hardware || {};
+    if('hardware_history' in m) S.hardware_history = m.hardware_history || [];
+    if('detected_tools' in m) S.detected_tools = m.detected_tools || [];
+    if(m.chat_log){S.chat_log=m.chat_log;renderChat();}
+    if(m.event_log){S.event_log=m.event_log;renderEvents();}
+    if(m.memory && m.memory.context) S.context = m.memory.context;
+    render();
+  }else if(m.type==='event'){
+    S.event_log.push(m.data);appendEv(m.data);stats();
+  }else if(m.type==='chat_message'){
+    S.chat_log.push(m.data);appendMsg(m.data);
+  }else if(m.type==='agent_joined'||m.type==='agent_left'){
+    ws.send(JSON.stringify({type:'get_state'}));
+  }else if(m.type==='launch_result'){
+    const d=m.data;if(d.ok)launchedTools.add(d.tool);renderTools();
+    appendMsg({sender:'system',text:d.msg||d.error,timestamp:new Date().toISOString()});
+    // ✅ FIX 1.5: Refresh state after launch so Connected Agents updates when bridge registers
+    if(d.ok)setTimeout(()=>ws.send(JSON.stringify({type:'get_state'})),1500);
+  }else if(m.type==='stop_result'){
+    const d=m.data;if(d.ok)launchedTools.delete(d.tool);renderTools();
+  }
+}
+
+function render(){renderAgents();renderTasks();renderTools();renderHW();renderHWHistory();renderContext();stats();}
+
+function stats(){
+  document.getElementById('sa').textContent=Object.values(S.agents).filter(a=>a.is_active).length;
+  document.getElementById('st').textContent=Object.keys(S.tasks).length;
+  document.getElementById('sl').textContent=Object.keys(S.locks).length;
+  document.getElementById('ac').textContent=Object.values(S.agents).filter(a=>a.is_active).length;
+}
+
+// Visual status mapping. `idle` is considered "connected but not working".
+const SC={idle:'var(--gr)',reading:'var(--bl)',writing:'var(--ye)',thinking:'var(--gr)',suspended:'var(--re)',disconnected:'var(--mu)'};
+
+function renderAgents(){
+  const el=document.getElementById('al'),ags=Object.values(S.agents);
+  const active = (ags||[]).filter(a=>!!a.is_active);
+  if(!active.length){
+    el.innerHTML='<div style="color:var(--mu);font-style:italic;font-size:11px">Waiting for agents…</div>';
+    return;
+  }
+  el.innerHTML=active.map(a=>{
+    const raw=String(a.status||'');
+    const lower=raw.toLowerCase();
+    const st=(lower==='disconnected' || lower==='offline') ? 'idle' : raw;
+    const c=SC[st] || 'var(--mu)';
+    return `
+      <div class="ac" style="opacity:1">
+        <div class="ac-h">
+          <div class="dot" style="background:${c};box-shadow:0 0 6px ${c}"></div>
+          <div class="an">${a.model_id || a.model}</div>
+          <div class="rb ${a.role==='architect'?'rba':'rbg'}">${a.role}</div>
+        </div>
+        <div class="am" style="color:${c}">
+          ${st}${a.current_task?` <span style="color:var(--ye)">· ${a.current_task}</span>`:''}
+          ${a.session_id?`<br><span style="color:var(--mu);font-size:8px">SID: ${a.session_id.slice(0,8)}...</span>`:''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderContext(){
+  const el=document.getElementById('kl'),ctx=S.context||[];
+  if(!ctx.length){el.innerHTML='<div style="color:var(--mu);font-style:italic">No discoveries shared yet…</div>';return;}
+  el.innerHTML=ctx.map(c=>`
+    <div style="margin-bottom:6px;border-left:1px solid var(--bdr2);padding-left:6px">
+      <div style="color:var(--tx);font-weight:600">${c.key}</div>
+      <div style="color:var(--mu)">${c.value}</div>
+      <div style="font-size:8px;color:var(--bdr2)">by ${c.source_agent} · ${c.timestamp.slice(11,16)}</div>
+    </div>`).join('');
+}
+
+function renderTasks(){
+  const activeEl=document.getElementById('task-list');
+  const completedEl=document.getElementById('ctl');
+  const allTasks=Object.values(S.tasks||{});
+  
+  const activeTasks = allTasks.filter(t => t.status !== 'completed').sort((a,b)=>a.created_at-b.created_at);
+  const completedTasks = allTasks.filter(t => t.status === 'completed').sort((a,b)=>new Date(b.completed_at||0)-new Date(a.completed_at||0));
+
+  if(!activeTasks.length){
+    activeEl.innerHTML='<div class="empty">No active tasks — send one from the command center below.</div>';
+  } else {
+    activeEl.innerHTML=activeTasks.map(t=>`
+      <div class="tr">
+        <div>
+          <div class="tid">${t.task_id} · ${t.operation}</div>
+          <div class="tdesc">${t.description}</div>
+          <div class="tfile">${t.file||''}</div>
+          ${t.depends_on?.length?`<div style="font-size:8px;color:var(--mu)">deps: ${t.depends_on.join(', ')}</div>`:''}
+          <div class="town">${t.owner_model?`By ${t.owner_model}`:'Unclaimed'}</div>
+        </div>
+        <div class="ts ts-${t.status}">${t.status}</div>
+      </div>`).join('');
+  }
+
+  if(!completedTasks.length){
+    completedEl.innerHTML='<div style="padding:15px;color:var(--mu);font-style:italic;font-size:11px;text-align:center">No completed tasks.</div>';
+  } else {
+    completedEl.innerHTML=completedTasks.map(t=>`
+      <div class="cti">
+        <div class="cti-h">
+          <div class="cti-id">${t.task_id}</div>
+          <div class="cti-m">${t.owner_model||''}</div>
+        </div>
+        <div class="cti-t">${t.description}</div>
+      </div>`).join('');
+  }
+}
+
+function renderTools(){
+  const el=document.getElementById('tl'),tools=S.detected_tools||[];
+  document.getElementById('tc').textContent=tools.length;
+  if(!tools.length){el.innerHTML='<div style="color:var(--mu);font-style:italic;font-size:11px">No known CLI tools detected in PATH.</div>';return;}
+  el.innerHTML=tools.map(t=>{
+    const isConnected=Object.values(S.agents).some(a=>a.is_active && (a.model_id===t.name||String(a.model_id||'').startsWith(t.name)));
+    const isLaunched=launchedTools.has(t.name);
+    const btnLabel=isConnected?'DISCONNECT':isLaunched?'LOADING...':'CONNECT';
+    const btnStyle=isConnected
+      ?'background:rgba(240,64,90,.18);color:var(--re);border:1px solid rgba(240,64,90,.3)'
+      :isLaunched
+      ?'background:rgba(58,184,240,.18);color:var(--bl);border:1px solid rgba(58,184,240,.3)'
+      :'background:rgba(58,240,160,.12);color:var(--gr);border:1px solid rgba(58,240,160,.25)';
+    return `<div class="ti">
+      <div class="dot" style="background:${isConnected?t.color:'var(--mu)'};box-shadow:0 0 5px ${t.color}55;width:7px;height:7px"></div>
+      <div style="flex:1">
+        <div class="tn">${t.label}</div>
+        <div class="tv">${t.version||''}</div>
+      </div>
+      <button onclick="toggleAgent('${t.name}')" style="font-family:var(--fc);font-size:9px;font-weight:700;letter-spacing:.5px;padding:3px 8px;border-radius:4px;cursor:pointer;${btnStyle}">${btnLabel}</button>
+    </div>`;
+  }).join('');
+}
+
+function renderHW(){
+  const hw=S.hardware||{};
+  const v=hw.vram?.used||0,vt=hw.vram?.total||16;
+  const r=hw.ram?.used||0,rt=hw.ram?.total||32;
+  document.getElementById('vt').textContent=`${v.toFixed(1)}/${vt} GB`;
+  document.getElementById('rt').textContent=`${r.toFixed(1)}/${rt} GB`;
+  const vp=Math.min(100,v/vt*100),rp=Math.min(100,r/rt*100);
+  const vf=document.getElementById('vf');
+  vf.style.width=vp+'%';vf.className='hwf'+(vp>85?' c':vp>65?' w':'');
+  const rf=document.getElementById('rf');
+  rf.style.width=rp+'%';rf.className='hwf'+(rp>85?' c':rp>65?' w':'');
+}
+
+function renderHWHistory(){
+  const c=document.getElementById('hw-heatmap');
+  if(!c) return;
+  const ctx=c.getContext('2d');
+  const hist=S.hardware_history||[];
+  ctx.clearRect(0,0,c.width,c.height);
+  if(!hist.length) return;
+
+  const N=Math.min(hist.length, 48);
+  const slice=hist.slice(-N);
+  const colW=c.width/N;
+  const topH=c.height/2,bottomH=c.height-topH;
+
+  for(let i=0;i<N;i++){
+    const s=slice[i]||{};
+    const vtot=s.vram_total||1, rtot=s.ram_total||1;
+    const vr=Math.max(0,Math.min(1,(s.vram_used||0)/vtot));
+    const rr=Math.max(0,Math.min(1,(s.ram_used||0)/rtot));
+
+    const vrHue=120*(1-vr);
+    const rrHue=120*(1-rr);
+    ctx.fillStyle=`hsl(${vrHue}, 85%, 45%)`;
+    ctx.fillRect(i*colW, 0, colW, topH);
+    ctx.fillStyle=`hsl(${rrHue}, 85%, 45%)`;
+    ctx.fillRect(i*colW, topH, colW, bottomH);
+  }
+}
+
+function renderChat(){
+  const el=document.getElementById('msgs');
+  el.innerHTML=(S.chat_log||[]).slice(-30).map(m=>`
+    <div class="msg ${m.sender}">
+      <strong>${m.sender==='user'?'You':m.sender==='system'?'System':m.sender}</strong> — ${m.text}
+    </div>`).join('');
+  el.scrollTop=el.scrollHeight;
+}
+
+function renderEvents(){
+  const el=document.getElementById('el');
+  const showRaw = !!document.getElementById('ev-show-raw')?.checked;
+  function esc(x){
+    return String(x ?? '').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+  }
+  el.innerHTML=(S.event_log||[]).slice(-40).map(e=>{
+    const etype=e.event||'?';let cls='ei-lr';
+    if(etype.includes('lock'))cls='ei-lg';
+    else if(etype.includes('task'))cls='ei-tc';
+    else if(etype.includes('register'))cls='ei-ar';
+    else if(etype.includes('file'))cls='ei-fc';
+    let raw='';
+    if(showRaw && (e.stdout||e.stderr)){
+      const so=esc(e.stdout||'').slice(0,700);
+      const se=esc(e.stderr||'').slice(0,700);
+      raw = `<div style="margin-top:6px;font-size:9px;color:var(--mu)">
+        <div style="font-weight:700;color:var(--bdr2)">stdout</div>
+        <pre style="white-space:pre-wrap;margin:4px 0;max-height:110px;overflow:auto">${so}</pre>
+        <div style="font-weight:700;color:var(--bdr2)">stderr</div>
+        <pre style="white-space:pre-wrap;margin:4px 0;max-height:110px;overflow:auto">${se}</pre>
+      </div>`;
+    }
+    return `<div class="ei ${cls}"><span class="ets">${e.timestamp?.slice(11,19)||''}</span> <span class="elb">${etype}</span>${e.model?` <span class="emd">${e.model}</span>`:''}${raw}</div>`;
+  }).join('');
+  document.getElementById('ec').textContent=(S.event_log||[]).length;
+  el.scrollTop=el.scrollHeight;
+}
+
+let selectedFolder=localStorage.getItem('devmesh_working_dir')||'';
+
+// ── Folder picker ─────────────────────────────────────────────────────────
+let fpCurrentPath=selectedFolder;
+let fpPending=selectedFolder;
+
+function displaySelectedFolder(){
+  const pathEl=document.getElementById('selected-folder-path');
+  if(pathEl) pathEl.textContent=selectedFolder;
+  const el=document.getElementById('selected-folder');
+  if(el) el.style.display='block';
+}
+
+async function openFolderPicker(){
+  document.getElementById('folder-modal').classList.add('shown');
+  fpPending=selectedFolder;
+  document.getElementById('fp-sel-label').textContent=selectedFolder;
+  await fpNav(selectedFolder);
+}
+
+function closeFolderPicker(){
+  document.getElementById('folder-modal').classList.remove('shown');
+}
+
+function confirmFolder(){
+  selectedFolder=fpPending;
+  localStorage.setItem('devmesh_working_dir',selectedFolder);
+  displaySelectedFolder();
+  closeFolderPicker();
+}
+
+async function fpNav(path){
+  fpCurrentPath=path||'/';
+  const inp=document.getElementById('fp-path-input');
+  if(inp) inp.value=fpCurrentPath;
+  fpBreadcrumb(fpCurrentPath);
+  const list=document.getElementById('fp-list');
+  list.innerHTML='<div class="fp-loading">Loading...</div>';
+  try{
+    const r=await fetch('/api/folders?path='+encodeURIComponent(fpCurrentPath));
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    fpRender(d.entries||[]);
+  }catch(e){
+    list.innerHTML='<div class="fp-error">Cannot open: '+e.message+'</div>';
+  }
+}
+
+function fpBreadcrumb(path){
+  const el=document.getElementById('fp-breadcrumb');
+  const safePath=(path||'/');
+  const parts=safePath.split('/').filter(Boolean);
+  let html='<span class="fp-crumb" onclick="fpNav(\'/\')">root</span>';
+  let built='';
+  parts.forEach((p,i)=>{
+    built+='/'+p;
+    const last=(i===parts.length-1);
+    html+='<span class="fp-crumb-sep">/</span>';
+    html+=last
+      ?'<span class="fp-crumb-cur">'+p+'</span>'
+      :'<span class="fp-crumb" onclick="fpNav(\''+built+'\')">'+p+'</span>';
+  });
+  el.innerHTML=html;
+}
+
+function fpRender(entries){
+  const list=document.getElementById('fp-list');
+  if(!entries.length){
+    list.innerHTML='<div class="fp-loading">Empty or inaccessible</div>';return;
+  }
+  const dirs=entries.filter(e=>e.type==='dir').sort((a,b)=>a.name.localeCompare(b.name));
+  const files=entries.filter(e=>e.type!=='dir').sort((a,b)=>a.name.localeCompare(b.name));
+  list.innerHTML=[...dirs,...files].map(e=>{
+    const isDir=e.type==='dir';
+    const sel=fpPending===e.path&&isDir;
+    const pp=e.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return '<div class="fi'+(sel?' sel':'')+'" onclick="fpClick(event,\''+pp+'\','+isDir+')">'
+      +'<span class="fi-badge '+(isDir?'dir':'file')+'">'+(isDir?'DIR':'FILE')+'</span>'
+      +'<span class="fi-name">'+e.name+'</span>'
+      +'<span class="fi-meta">'+(e.count!=null?e.count+' items':'')+'</span>'
+      +(isDir?'<span class="fi-arr">&#x203a;</span>':'')
+      +'</div>';
+  }).join('');
+}
+
+function fpClick(event,path,isDir){
+  event.stopPropagation();
+  if(!isDir) return;
+  if(fpPending===path){
+    fpNav(path); // double-click = enter folder
+  }else{
+    fpPending=path;
+    document.getElementById('fp-sel-label').textContent=path;
+    document.querySelectorAll('.fi').forEach(el=>el.classList.remove('sel'));
+    event.currentTarget.classList.add('sel');
+  }
+}
+
+function fpGoToPath(){
+  const v=(document.getElementById('fp-path-input')||{}).value||'';
+  if(v.trim()) fpNav(v.trim());
+}
+
+function send(){
+  const inp=document.getElementById('ci');
+  const text=inp.value.trim();
+  if(!text)return;
+  inp.value='';
+  ws.send(JSON.stringify({type:'chat',text,working_dir:selectedFolder}));
+}
+
+function toggleAgent(tool){
+  // ✅ FIX 2: Check actual connected state, not just local launchedTools set
+  const isConnected = Object.values(S.agents).some(
+    a => a.is_active && (a.model_id === tool || String(a.model_id||'').startsWith(tool))
+  );
+  if(isConnected || launchedTools.has(tool)){
+    ws.send(JSON.stringify({type:'stop_agent',tool_name:tool}));
+    launchedTools.delete(tool);
+  } else {
+    ws.send(JSON.stringify({type:'launch_agent',tool_name:tool}));
+  }
+}
+
+function rescan(){
+  ws.send(JSON.stringify({type:'rescan_tools'}));
+}
+
+document.getElementById('ci').addEventListener('keypress',e=>{if(e.key==='Enter')send()});
+document.addEventListener('keydown',e=>{
+  const inp=document.getElementById('fp-path-input');
+  if(inp&&e.key==='Enter'&&document.activeElement===inp){e.preventDefault();fpGoToPath();}
+});
+displaySelectedFolder();
+// Prefer server-provided default project root on first run.
+if(!selectedFolder){
+  fetch('/api/default_workdir').then(r=>r.json()).then(d=>{
+    if(d && d.default_working_dir){
+      selectedFolder=d.default_working_dir;
+      localStorage.setItem('devmesh_working_dir',selectedFolder);
+      displaySelectedFolder();
+    }
+  }).catch(()=>{});
+}
+conn();
+</script>
+</body>
+</html>
