@@ -77,8 +77,9 @@ class _ConnectionPool:
 
 
 class StorageManager:
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path, audit_log_path: Optional[Path] = None):
         self.db_path = db_path
+        self.audit_log_path = audit_log_path
         self._pool = _ConnectionPool(db_path)
         self._write_queue: queue.Queue = queue.Queue()
         self._writer_thread: Optional[threading.Thread] = None
@@ -86,6 +87,11 @@ class StorageManager:
         self._batch_interval = 0.1  # Batch writes every 100ms
         self._start_writer_thread()
         self._init_db()
+        if self.audit_log_path:
+            try:
+                self.audit_log_path.parent.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                log.error(f"Failed to create audit log dir: {e}")
 
     def _start_writer_thread(self):
         """Start background thread for batched writes."""
@@ -390,15 +396,27 @@ class StorageManager:
 
     def log_event(self, event_type: str, model_id: str, details: Dict):
         def _do_log(conn):
+            ts = datetime.now().isoformat()
             conn.execute("""
                 INSERT INTO audit_log (timestamp, event_type, model_id, details)
                 VALUES (?, ?, ?, ?)
             """, (
-                datetime.now().isoformat(),
+                ts,
                 event_type,
                 model_id,
                 json.dumps(details)
             ))
+            if self.audit_log_path:
+                try:
+                    with self.audit_log_path.open("a", encoding="utf-8") as f:
+                        f.write(json.dumps({
+                            "timestamp": ts,
+                            "event_type": event_type,
+                            "model_id": model_id,
+                            "details": details,
+                        }) + "\n")
+                except Exception as e:
+                    log.error(f"Failed to write audit log file: {e}")
         
         self._queue_write(_do_log)
 

@@ -20,6 +20,7 @@ import tempfile
 import time
 import webbrowser
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -215,7 +216,7 @@ class DevMeshServer:
         
         # New Storage Layer
         db_path = cfg.audit_log_dir / "devmesh.db"
-        self.storage = StorageManager(db_path)
+        self.storage = StorageManager(db_path, audit_log_path=cfg.audit_log_path)
         
         # Migrate legacy memory.json if exists
         self._migrate_legacy_memory()
@@ -265,9 +266,10 @@ class DevMeshServer:
     def _reset_stale_agents(self):
         """On fresh start, mark all persisted agents as inactive so they don't appear as connected."""
         try:
-            conn = self.storage._get_conn()
-            conn.execute("UPDATE agents SET is_active = 0, status = 'offline'")
-            conn.commit()
+            with self.storage._get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("UPDATE agents SET is_active = 0, status = 'offline'")
+                conn.commit()
             log.info("Reset all stale agents to inactive on startup.")
         except Exception as e:
             log.warning(f"Failed to reset stale agents: {e}")
@@ -1197,6 +1199,9 @@ class DevMeshServer:
         try:
             async for msg in ws:
                 await self._handle_agent_message(ws, msg)
+        except websockets.exceptions.ConnectionClosed:
+            # Expected during disconnects/reconnects; don't spam logs/tracebacks.
+            pass
         except Exception as e:
             log.error(f"Error in agent handler for {getattr(ws, '_agent_id', 'unknown')}: {e}")
         finally:
@@ -1209,13 +1214,16 @@ class DevMeshServer:
 
     async def dash_handler(self, ws, path=""):
         self.dash_clients.add(ws)
-        await ws.send(json.dumps(self._full_state()))
         try:
+            await ws.send(json.dumps(self._full_state()))
             async for msg in ws:
                 try:
                     await self._handle_dash_message(json.loads(msg))
                 except Exception as e:
                     log.error(f"Error processing dashboard message: {e}")
+        except (websockets.exceptions.ConnectionClosed, ConnectionResetError):
+            # Normal disconnect/reset; avoid "connection handler failed" tracebacks.
+            pass
         finally:
             self.dash_clients.discard(ws)
 
@@ -1449,7 +1457,8 @@ class DevMeshServer:
                 # Gracefully close storage
                 self.storage.close()
                 if self.http_server:
-                    self.http_server.shutdown()
+                    with suppress(KeyboardInterrupt):
+                        self.http_server.shutdown()
     
     def _list_folders(self, path: str = "/home") -> List[Dict]:
         entries: List[Dict] = []
@@ -1530,4 +1539,7 @@ async def main():
     await server.run()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
