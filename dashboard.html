@@ -234,10 +234,6 @@ header{
 
 <div id="cp">
   <div id="task-list"><div class="empty">No tasks yet — send one from the command center below.</div></div>
-  <div id="task-graph-wrap" style="margin-top:12px;border-top:1px solid var(--bdr);padding-top:12px">
-    <div class="sec-t" style="font-size:10px;margin-bottom:6px;color:var(--mu)">Task Graph</div>
-    <svg id="task-graph" width="100%" height="140"></svg>
-  </div>
   <div class="chat">
     <div class="chat-t">▸ Task Command Center — broadcasts to all agents</div>
     <div class="msgs" id="msgs"></div>
@@ -273,7 +269,6 @@ header{
   <div id="el"></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 <script>
 const WS='ws://127.0.0.1:7702';
 let ws=null,S={agents:{},tasks:{},locks:{},hardware:{},hardware_history:[],detected_tools:[],chat_log:[],event_log:[]};
@@ -323,7 +318,7 @@ function dispatch(m){
   }
 }
 
-function render(){renderAgents();renderTasks();renderTools();renderHW();renderHWHistory();renderTaskGraph();renderContext();stats();}
+function render(){renderAgents();renderTasks();renderTools();renderHW();renderHWHistory();renderContext();stats();}
 
 function stats(){
   document.getElementById('sa').textContent=Object.values(S.agents).filter(a=>a.is_active).length;
@@ -386,90 +381,7 @@ function renderTasks(){
   el.scrollTop=el.scrollHeight;
 }
 
-function renderTaskGraph(){
-  const svg=document.getElementById('task-graph');
-  if(!svg || !window.d3) return;
-  const tasks=Object.values(S.tasks||{});
-  const w=svg.clientWidth||600;
-  const h=140;
-  svg.setAttribute('width',w);
-  svg.setAttribute('height',h);
-  while(svg.firstChild) svg.removeChild(svg.firstChild);
-  if(!tasks.length) return;
 
-  const nodeMap=new Set(tasks.map(t=>t.task_id));
-  const nodes=tasks.map(t=>({
-    id:t.task_id,
-    label:t.task_id,
-    status:t.status||'queued',
-    depends_on:t.depends_on||[],
-  }));
-
-  const links=[];
-  tasks.forEach(t=>{
-    (t.depends_on||[]).forEach(dep=>{
-      if(nodeMap.has(dep)) links.push({source:dep, target:t.task_id});
-    });
-  });
-
-  const colorOf=(st)=>{
-    const s=(st||'').toString();
-    if(s.includes('completed')) return 'rgb(64,200,120)';
-    if(s.includes('working')) return 'rgb(255,200,80)';
-    if(s.includes('paused')) return 'rgb(170,120,255)';
-    if(s.includes('abandoned') || s.includes('failed')) return 'rgb(190,190,190)';
-    return 'rgb(90,150,220)';
-  };
-
-  const d3svg=d3.select(svg);
-  const g=d3svg.append('g');
-
-  const link=g.selectAll('line')
-    .data(links)
-    .enter().append('line')
-    .attr('stroke','rgba(180,180,220,.35)')
-    .attr('stroke-width',1);
-
-  const node=g.selectAll('g')
-    .data(nodes)
-    .enter().append('g')
-    .call(d3.drag()
-      .on('start', (event)=>{ if(!event.active) sim.alphaTarget(0.3).restart(); })
-      .on('drag', (event)=>{ event.subject.fx=event.x; event.subject.fy=event.y; })
-      .on('end', (event)=>{ if(!event.active) sim.alphaTarget(0); event.subject.fx=null; event.subject.fy=null; })
-    );
-
-  const r=18;
-  node.append('circle')
-    .attr('r',r/2)
-    .attr('fill',d=>colorOf(d.status))
-    .attr('stroke','rgba(0,0,0,.25)');
-
-  node.append('text')
-    .text(d=>String(d.id).slice(0,10))
-    .attr('text-anchor','middle')
-    .attr('dy','0.35em')
-    .style('font-size','10px')
-    .style('fill','rgba(10,10,10,.8)');
-
-  const sim=d3.forceSimulation(nodes)
-    .force('link', d3.forceLink(links).id(d=>d.id).distance(70).strength(0.6))
-    .force('charge', d3.forceManyBody().strength(-220))
-    .force('center', d3.forceCenter(w/2, h/2))
-    .force('collide', d3.forceCollide().radius(22))
-    .stop();
-
-  sim.on('tick', ()=>{
-    link
-      .attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
-      .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
-    node.attr('transform',d=>`translate(${d.x},${d.y})`);
-  });
-
-  // Run a short simulation burst to settle layout.
-  sim.alpha(1).restart();
-  setTimeout(()=>sim.stop(), 600);
-}
 
 function renderTools(){
   const el=document.getElementById('tl'),tools=S.detected_tools||[];

@@ -209,6 +209,10 @@ class DevMeshServer:
         self._agent_stderr_paths: Dict[str, str] = {}  # Track stderr log files
         self.http_server: Optional[HTTPServer] = None
         
+        # ✅ FIX 5: Throttle full state pushes to prevent excessive serialization
+        self._last_full_state_push: float = 0.0
+        self._full_state_push_interval: float = 0.5  # milliseconds between full state pushes
+        
         # New Storage Layer
         db_path = cfg.audit_log_dir / "devmesh.db"
         self.storage = StorageManager(db_path)
@@ -457,6 +461,28 @@ class DevMeshServer:
         msg = json.dumps(payload)
         await asyncio.gather(*[c.send(msg) for c in self.dash_clients], return_exceptions=True)
 
+    async def _push_dash_throttled(self, payload: Dict):
+        """Push to dashboard with throttling for full state updates to avoid serialization overhead.
+        
+        If payload contains a full state (_full_state result), throttle to ~500ms intervals.
+        Other payloads go through immediately.
+        """
+        if not self.dash_clients:
+            return
+        
+        # Check if this is a full state push (has 'agents', 'tasks', 'locks' keys)
+        is_full_state = "agents" in payload and "tasks" in payload and "locks" in payload
+        
+        if is_full_state:
+            now = time.time()
+            if now - self._last_full_state_push >= self._full_state_push_interval:
+                self._last_full_state_push = now
+                await self._push_dash(payload)
+            # else: silently throttle this full state push
+        else:
+            # Non-full-state payloads always go through
+            await self._push_dash(payload)
+
     # ── Agent protocol handlers ───────────────────────────────────────────
 
     async def _register(self, ws, data: Dict) -> Dict:
@@ -617,7 +643,7 @@ class DevMeshServer:
 
         await self._broadcast_agents({"event": "lock_released", "model": model, "target": target})
         self._audit({"event": "lock_released", "model": model, "target": target})
-        asyncio.create_task(self._push_dash(self._full_state()))
+        asyncio.create_task(self._push_dash_throttled(self._full_state()))
         return {"event": "lock_release_ack", "ok": True}
 
     async def _file_change(self, data: Dict) -> Dict:
@@ -710,7 +736,7 @@ class DevMeshServer:
             "stdout": str(stdout)[:20000] if stdout else "",
             "stderr": str(stderr)[:20000] if stderr else "",
         })
-        asyncio.create_task(self._push_dash(self._full_state()))
+        asyncio.create_task(self._push_dash_throttled(self._full_state()))
         return {
             "event": "file_change_ack",
             "path": path,
@@ -746,7 +772,7 @@ class DevMeshServer:
 
             self._audit({"event": "task_created", "task_id": task_id, "by": model})
             await self._broadcast_agents({"event": "task_created", "task": self._serialize_task(t)})
-            asyncio.create_task(self._push_dash(self._full_state()))
+            asyncio.create_task(self._push_dash_throttled(self._full_state()))
             return {"event": "task_created_ack", "task_id": task_id}
 
         if ev == "claim":
@@ -776,7 +802,7 @@ class DevMeshServer:
 
             self._audit({"event": "task_claimed", "task_id": task_id, "by": model})
             await self._broadcast_agents({"event": "task_claimed", "task_id": task_id, "by": model})
-            asyncio.create_task(self._push_dash(self._full_state()))
+            asyncio.create_task(self._push_dash_throttled(self._full_state()))
             return {"event": "claim_ack", "task_id": task_id}
 
         if ev == "start":
@@ -1188,8 +1214,8 @@ class DevMeshServer:
             async for msg in ws:
                 try:
                     await self._handle_dash_message(json.loads(msg))
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.error(f"Error processing dashboard message: {e}")
         finally:
             self.dash_clients.discard(ws)
 
@@ -1257,12 +1283,7 @@ class DevMeshServer:
                     self.locks.pop(target, None)
             
             for l in expired:
-                # If the agent is disconnected but still inside the reconnect grace window,
-                # keep the lock/task reserved instead of abandoning it.
-                deadline = self._agent_disconnect_deadline.get(l.holder)
-                if deadline and now_ts < deadline:
-                    continue
-
+                # Already filtered by grace window above; this lock is truly expired.
                 log.warning(f"Lock expired for {l.holder} on {l.target} (heartbeat timeout)")
                 for t in self.tasks.values():
                     if t.owner_model == l.holder and t.status in {TaskState.WORKING, TaskState.PAUSED}:
