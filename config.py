@@ -115,7 +115,8 @@ class AgentConfig:
 # Shared tool definitions
 
 KNOWN_CLI_TOOLS: list[Dict] = [
-    {"name": "claude",   "cmd": "agent",    "label": "Claude Code",      "color": "#D4A847"},
+    {"name": "claude",   "cmd": "claude",    "label": "Claude Code",      "color": "#D4A847"},
+    {"name": "cursor",   "cmd": "agent",    "label": "Cursor",           "color": "#4EA1F3"},
     {"name": "gemini",   "cmd": "gemini",   "label": "Gemini CLI",       "color": "#4285F4"},
     {"name": "codex",    "cmd": "codex",    "label": "OpenAI Codex",     "color": "#10A37F"},
     {"name": "aider",    "cmd": "aider",    "label": "Aider",            "color": "#7C3AED"},
@@ -131,7 +132,22 @@ TOOL_PROFILES: Dict = {
         "label": "Claude Code",
         "color": "#D4A847",
         "invoke_mode": "arg",
-        "cmd": ["agent", "--no-build", "--approve-all", "{prompt}"],
+        "cmd": ["claude", "--no-build", "--approve-all", "{prompt}"],
+        "capabilities": {"languages": ["python","javascript","typescript","go","rust","java"],
+                         "frameworks": ["react","django","fastapi","express","nextjs"]},
+        "resources": {"vram_gb": 0, "ram_gb": 2},
+    },
+    "cursor": {
+        "label": "Cursor",
+        "color": "#4EA1F3",
+        "invoke_mode": "arg",
+        "cmd": [
+            "agent",
+            "--print",
+            "--output-format", "text",
+            "--trust",
+            "{prompt}",
+        ],
         "capabilities": {"languages": ["python","javascript","typescript","go","rust","java"],
                          "frameworks": ["react","django","fastapi","express","nextjs"]},
         "resources": {"vram_gb": 0, "ram_gb": 2},
@@ -140,11 +156,9 @@ TOOL_PROFILES: Dict = {
         "label": "Gemini CLI",
         "color": "#4285F4",
         "invoke_mode": "arg",
-        # ✅ FIX 5.6: Use a known-stable Gemini model as default
-        # Availability varies by account/project/quota. Override with DEVMESH_GEMINI_MODEL env var.
         "cmd": [
             "gemini",
-            "--model", "gemini-2.0-flash",
+            "--model", "gemini-3-flash-preview",
             "--approval-mode", "yolo",
             "--prompt", "{prompt}",
             "--output-format", "text",
@@ -157,8 +171,6 @@ TOOL_PROFILES: Dict = {
         "label": "OpenAI Codex",
         "color": "#10A37F",
         "invoke_mode": "arg",
-        # Codex defaults to an interactive TUI if no subcommand is provided.
-        # Use `exec --json` for robust headless invocation.
         "cmd": [
             "codex",
             "--ask-for-approval", "never",
