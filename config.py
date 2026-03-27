@@ -121,7 +121,6 @@ KNOWN_CLI_TOOLS: list[Dict] = [
     {"name": "aider",    "cmd": "aider",    "label": "Aider",            "color": "#7C3AED"},
     {"name": "continue", "cmd": "continue", "label": "Continue",         "color": "#06B6D4"},
     {"name": "cody",     "cmd": "cody",     "label": "Sourcegraph Cody", "color": "#FF5543"},
-    {"name": "cursor",   "cmd": "cursor",   "label": "Cursor",           "color": "#0EA5E9"},
     {"name": "ollama",   "cmd": "ollama",   "label": "Ollama",           "color": "#F97316"},
     {"name": "sgpt",     "cmd": "sgpt",     "label": "ShellGPT",         "color": "#8B5CF6"},
     {"name": "gh",       "cmd": "gh",       "label": "GitHub Copilot",   "color": "#238636"},
@@ -132,7 +131,7 @@ TOOL_PROFILES: Dict = {
         "label": "Claude Code",
         "color": "#D4A847",
         "invoke_mode": "arg",
-        "cmd": ["agent", "--no-build", "{prompt}"],
+        "cmd": ["agent", "--no-build", "--approve-all", "{prompt}"],
         "capabilities": {"languages": ["python","javascript","typescript","go","rust","java"],
                          "frameworks": ["react","django","fastapi","express","nextjs"]},
         "resources": {"vram_gb": 0, "ram_gb": 2},
@@ -163,7 +162,6 @@ TOOL_PROFILES: Dict = {
         "cmd": [
             "codex",
             "--ask-for-approval", "never",
-            "--non-interactive",
             "--sandbox", "workspace-write",
             "exec",
             "--skip-git-repo-check",
@@ -221,15 +219,7 @@ TOOL_PROFILES: Dict = {
                          "specializations": ["code-search","refactoring"]},
         "resources": {"vram_gb": 0, "ram_gb": 2},
     },
-    "cursor": {
-        "label": "Cursor",
-        "color": "#0EA5E9",
-        "invoke_mode": "note",
-        "cmd": [],
-        "capabilities": {"languages": ["python","javascript","typescript"],
-                         "specializations": ["editor","autocomplete"]},
-        "resources": {"vram_gb": 0, "ram_gb": 4},
-    },
+
     "gh": {
         "label": "GitHub Copilot",
         "color": "#238636",
