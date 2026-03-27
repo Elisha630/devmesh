@@ -115,9 +115,9 @@ class AgentConfig:
 # Shared tool definitions
 
 KNOWN_CLI_TOOLS: list[Dict] = [
-    {"name": "claude",   "cmd": "claude",    "label": "Claude Code",      "color": "#D4A847"},
-    {"name": "cursor",   "cmd": "agent",    "label": "Cursor",           "color": "#4EA1F3"},
-    {"name": "gemini",   "cmd": "gemini",   "label": "Gemini CLI",       "color": "#4285F4"},
+    {"name": "claude",   "cmd": "claude",    "label": "Claude Code",      "color": "#D8980E"},
+    {"name": "cursor",   "cmd": "agent",    "label": "Cursor",           "color": "#201E1B"},
+    {"name": "gemini",   "cmd": "gemini",   "label": "Gemini CLI",       "color": "#1B61D1"},
     {"name": "codex",    "cmd": "codex",    "label": "OpenAI Codex",     "color": "#10A37F"},
     {"name": "aider",    "cmd": "aider",    "label": "Aider",            "color": "#7C3AED"},
     {"name": "continue", "cmd": "continue", "label": "Continue",         "color": "#06B6D4"},
@@ -130,7 +130,7 @@ KNOWN_CLI_TOOLS: list[Dict] = [
 TOOL_PROFILES: Dict = {
     "claude": {
         "label": "Claude Code",
-        "color": "#D4A847",
+        "color": "#D8980E",
         "invoke_mode": "arg",
         "cmd": ["claude", "--no-build", "--approve-all", "{prompt}"],
         "capabilities": {"languages": ["python","javascript","typescript","go","rust","java"],
@@ -139,7 +139,7 @@ TOOL_PROFILES: Dict = {
     },
     "cursor": {
         "label": "Cursor",
-        "color": "#4EA1F3",
+        "color": "#201E1B",
         "invoke_mode": "arg",
         "cmd": [
             "agent",
@@ -154,7 +154,7 @@ TOOL_PROFILES: Dict = {
     },
     "gemini": {
         "label": "Gemini CLI",
-        "color": "#4285F4",
+        "color": "#1B61D1",
         "invoke_mode": "arg",
         "cmd": [
             "gemini",
