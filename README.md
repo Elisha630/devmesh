@@ -12,7 +12,7 @@ DevMesh is a local multi-agent orchestration system that coordinates multiple AI
 - **Live Dashboard** — Real-time visualization of tasks, agents, and locks
 - **Lock Management** — READ/WRITE/INTENT/CO_WRITE semantics for safe collaboration
 - **Hardware Throttling** — Resource limits (GPU/RAM) enforced per agent
-- **Audit Logging** — Complete event history for debugging and compliance
+- **Audit Logging** — Event history persisted to SQLite and JSONL
 - **Configuration Management** — Environment-based settings with validation
 - **Structured Logging** — Color-coded console output with optional file logging
 
@@ -27,13 +27,14 @@ DevMesh is a local multi-agent orchestration system that coordinates multiple AI
 ├── config.py              # Configuration management & validation
 ├── logger.py              # Structured logging with colored output
 ├── errors.py              # Custom exception hierarchy
-├── storage.py             # In-memory storage with audit logging
+├── storage.py             # SQLite storage + audit logging
 ├── check_tools.py         # Utility to verify available CLI tools
 ├── requirements.txt       # Python dependencies
 ├── tests/
 │   └── test_core.py       # Unit tests
 └── .devmesh/
-    └── audit.jsonl        # Event audit log
+    ├── audit.jsonl        # Event audit log (JSONL mirror)
+    └── devmesh.db         # SQLite persistence (tasks, agents, audit, projects)
 ```
 
 ## 🚀 Quick Start
@@ -51,14 +52,14 @@ The dashboard will automatically open at `http://127.0.0.1:7701`
 
 ### Available Tools
 
-DevMesh supports the following AI CLI tools:
+DevMesh supports the following AI CLI tools (auto-detected from PATH):
 - `claude` — Anthropic Claude
 - `gemini` — Google Gemini
 - `codex` — OpenAI Codex
 - `aider` — Aider pair programming
 - `continue` — Continue IDE extension
 - `cody` — Sourcegraph Cody
-- `cursor` — Cursor IDE
+- `cursor` — Cursor Agent CLI (headless via `--print`)
 - `ollama` — Local LLM runner
 - `sgpt` — Shell GPT
 - `gh` — GitHub Copilot CLI
@@ -131,9 +132,9 @@ QUEUED → CLAIMED → WORKING → COMPLETED
 - **Better debugging** — Context, suggestions, and stack traces
 
 ### Storage Layer (`storage.py`)
-- **In-memory storage** — Fast access for agents, tasks, and locks
-- **Audit logging** — All events written to `.devmesh/audit.jsonl`
-- **Thread-safe operations** — Safe concurrent access
+- **SQLite storage** — Persistent tasks, agents, projects, and audit log
+- **Audit logging** — Events written to `.devmesh/devmesh.db` and mirrored to `.devmesh/audit.jsonl`
+- **Thread-safe operations** — Safe concurrent access with a write queue
 
 ### Dashboard (`dashboard.html`)
 - **Real-time updates** — WebSocket-driven live visualization
@@ -162,7 +163,7 @@ DevMesh enforces a set of rules to ensure safe multi-agent collaboration:
 
 ## 📈 TODO / Future Work
 
-- [ ] Persistent task storage (SQLite/PostgreSQL)
+- [ ] Optional PostgreSQL backend
 - [ ] Agent recovery on connection loss
 - [ ] Task priority queuing and scheduling
 - [ ] Dashboard streaming WebSocket optimization
