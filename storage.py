@@ -25,14 +25,14 @@ log = logging.getLogger("devmesh.storage")
 
 class _ConnectionPool:
     """Simple connection pool for thread-safe SQLite access."""
-    
+
     def __init__(self, db_path: Path, pool_size: int = 5):
         self.db_path = db_path
         self.pool_size = pool_size
         self._pool: queue.Queue = queue.Queue(maxsize=pool_size)
         self._lock = threading.Lock()
         self._initialized = False
-        
+
     def _create_connection(self) -> sqlite3.Connection:
         """Create a new database connection with proper settings."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -44,7 +44,7 @@ class _ConnectionPool:
         conn.execute("PRAGMA busy_timeout=5000")
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
-    
+
     def _ensure_pool(self):
         """Initialize the connection pool if not already done."""
         if not self._initialized:
@@ -53,7 +53,7 @@ class _ConnectionPool:
                     for _ in range(self.pool_size):
                         self._pool.put(self._create_connection())
                     self._initialized = True
-    
+
     @contextmanager
     def get_connection(self):
         """Get a connection from the pool (context manager)."""
@@ -63,7 +63,7 @@ class _ConnectionPool:
             yield conn
         finally:
             self._pool.put(conn)
-    
+
     def close_all(self):
         """Close all connections in the pool."""
         with self._lock:
@@ -107,12 +107,12 @@ class StorageManager:
         """Start background thread for batched writes."""
         self._writer_thread = threading.Thread(target=self._write_worker, daemon=True)
         self._writer_thread.start()
-    
+
     def _write_worker(self):
         """Background worker that processes write operations in batches."""
         pending = []
         last_flush = time.time()
-        
+
         assert self._stop_writer is not None
         assert self._write_queue is not None
         while not self._stop_writer.is_set():
@@ -122,7 +122,7 @@ class StorageManager:
                 if item is None:  # Shutdown signal
                     break
                 pending.append(item)
-                
+
                 # Flush if batch is large enough or time has passed
                 now = time.time()
                 if len(pending) >= 10 or (now - last_flush) >= self._batch_interval:
@@ -135,11 +135,11 @@ class StorageManager:
                     self._flush_batch(pending)
                     pending = []
                     last_flush = time.time()
-        
+
         # Final flush on shutdown
         if pending:
             self._flush_batch(pending)
-    
+
     def _flush_batch(self, operations: list):
         """Execute a batch of database operations."""
         with self._pool.get_connection() as conn:
@@ -149,7 +149,7 @@ class StorageManager:
                 except Exception as e:
                     log.error(f"Error in batch operation: {e}")
             conn.commit()
-    
+
     def _queue_write(self, operation):
         """
         Write operation dispatcher.
@@ -165,7 +165,7 @@ class StorageManager:
 
         assert self._write_queue is not None
         self._write_queue.put(operation)
-    
+
     @contextmanager
     def _get_conn(self):
         """Get a connection from the pool (context manager for reads)."""
@@ -176,9 +176,10 @@ class StorageManager:
         """Initialize database schema."""
         with self._get_conn() as conn:
             cur = conn.cursor()
-            
+
             # Agents table
-            cur.execute("""
+            cur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS agents (
                     model_id TEXT PRIMARY KEY,
                     session_id TEXT,
@@ -189,10 +190,12 @@ class StorageManager:
                     last_seen TEXT,
                     hardware_usage JSON
                 )
-            """)
+            """
+            )
 
             # Tasks table
-            cur.execute("""
+            cur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS tasks (
                     task_id TEXT PRIMARY KEY,
                     description TEXT,
@@ -206,8 +209,9 @@ class StorageManager:
                     details JSON,
                     priority INTEGER DEFAULT 3
                 )
-            """)
-            
+            """
+            )
+
             # Migrate: add priority column if it doesn't exist (for existing databases)
             try:
                 cur.execute("SELECT priority FROM tasks LIMIT 1")
@@ -216,7 +220,8 @@ class StorageManager:
                 log.info("Migrated tasks table: added priority column")
 
             # Projects table (New in Phase 1 upgrade)
-            cur.execute("""
+            cur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS projects (
                     project_id TEXT PRIMARY KEY,
                     name TEXT,
@@ -225,10 +230,12 @@ class StorageManager:
                     created_at TEXT,
                     last_used_at TEXT
                 )
-            """)
+            """
+            )
 
             # Audit Log table
-            cur.execute("""
+            cur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS audit_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp TEXT,
@@ -236,18 +243,22 @@ class StorageManager:
                     model_id TEXT,
                     details JSON
                 )
-            """)
+            """
+            )
 
             # KV Store for global state (config, rulebook version, etc.)
-            cur.execute("""
+            cur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS kv_store (
                     key TEXT PRIMARY KEY,
                     value JSON
                 )
-            """)
+            """
+            )
 
             # Context RAG tables (Phase 3 foundation)
-            cur.execute("""
+            cur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS context_items (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     key TEXT,
@@ -257,15 +268,20 @@ class StorageManager:
                     timestamp TEXT,
                     project_id TEXT
                 )
-            """)
+            """
+            )
 
             # Performance indexes for frequent lookups.
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority DESC)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp DESC)")
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp DESC)"
+            )
             cur.execute("CREATE INDEX IF NOT EXISTS idx_agents_last_seen ON agents(last_seen DESC)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_context_items_timestamp ON context_items(timestamp DESC)")
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_context_items_timestamp ON context_items(timestamp DESC)"
+            )
 
             conn.commit()
 
@@ -280,7 +296,7 @@ class StorageManager:
             # Wait for writer thread to finish
             if self._writer_thread and self._writer_thread.is_alive():
                 self._writer_thread.join(timeout=2.0)
-        
+
         # Close all pooled connections
         self._pool.close_all()
 
@@ -290,13 +306,13 @@ class StorageManager:
             return
         # Create an event to signal when flush is complete
         flush_event = threading.Event()
-        
+
         def _flush_and_signal(conn):
             flush_event.set()
-        
+
         # Queue the flush signal operation
         self._queue_write(_flush_and_signal)
-        
+
         # Wait for the flush to complete
         flush_event.wait(timeout=timeout)
 
@@ -311,22 +327,28 @@ class StorageManager:
             final_data = data
 
         def _do_upsert(conn):
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO agents (
                     model_id, session_id, role, status, is_active, 
                     connected_at, last_seen, hardware_usage
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                model_id,
-                final_data.get("session_id"),
-                final_data.get("role", "agent"),
-                final_data.get("status", "idle"),
-                final_data.get("is_active", 1),
-                final_data.get("connected_at", existing["connected_at"] if existing else datetime.now().isoformat()),
-                datetime.now().isoformat(),
-                orjson.dumps(final_data.get("hardware_usage", {})).decode('utf-8')
-            ))
-        
+            """,
+                (
+                    model_id,
+                    final_data.get("session_id"),
+                    final_data.get("role", "agent"),
+                    final_data.get("status", "idle"),
+                    final_data.get("is_active", 1),
+                    final_data.get(
+                        "connected_at",
+                        existing["connected_at"] if existing else datetime.now().isoformat(),
+                    ),
+                    datetime.now().isoformat(),
+                    orjson.dumps(final_data.get("hardware_usage", {})).decode("utf-8"),
+                ),
+            )
+
         self._queue_write(_do_upsert)
 
     def get_agent(self, model_id: str) -> Optional[Dict]:
@@ -373,25 +395,31 @@ class StorageManager:
             priority = 3
 
         def _do_upsert(conn):
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO tasks (
                     task_id, description, status, owner_model, working_dir, 
                     file_target, created_at, completed_at, result_summary, details, priority
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                task_id,
-                final_data.get("description", ""),
-                final_data.get("status", "queued"),
-                final_data.get("owner_model"),
-                final_data.get("working_dir", ""),
-                final_data.get("file_target", ""),
-                final_data.get("created_at", existing["created_at"] if existing else datetime.now().isoformat()),
-                final_data.get("completed_at"),
-                final_data.get("result_summary"),
-                orjson.dumps(final_data.get("details", {})).decode('utf-8'),
-                priority
-            ))
-        
+            """,
+                (
+                    task_id,
+                    final_data.get("description", ""),
+                    final_data.get("status", "queued"),
+                    final_data.get("owner_model"),
+                    final_data.get("working_dir", ""),
+                    final_data.get("file_target", ""),
+                    final_data.get(
+                        "created_at",
+                        existing["created_at"] if existing else datetime.now().isoformat(),
+                    ),
+                    final_data.get("completed_at"),
+                    final_data.get("result_summary"),
+                    orjson.dumps(final_data.get("details", {})).decode("utf-8"),
+                    priority,
+                ),
+            )
+
         self._queue_write(_do_upsert)
 
     def get_task(self, task_id: str) -> Optional[Dict]:
@@ -410,7 +438,9 @@ class StorageManager:
         with self._get_conn() as conn:
             cur = conn.cursor()
             # Sort by priority DESC, then created_at DESC
-            cur.execute("SELECT * FROM tasks ORDER BY priority DESC, created_at DESC LIMIT ?", (limit,))
+            cur.execute(
+                "SELECT * FROM tasks ORDER BY priority DESC, created_at DESC LIMIT ?", (limit,)
+            )
             tasks = []
             for row in cur.fetchall():
                 d = dict(row)
@@ -429,18 +459,24 @@ class StorageManager:
             else:
                 final_data = data
 
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO projects (project_id, name, folder, base_dir, created_at, last_used_at)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                project_id,
-                final_data.get("name", ""),
-                final_data.get("folder", ""),
-                final_data.get("base_dir", ""),
-                final_data.get("created_at", existing["created_at"] if existing else datetime.now().isoformat()),
-                datetime.now().isoformat()
-            ))
-        
+            """,
+                (
+                    project_id,
+                    final_data.get("name", ""),
+                    final_data.get("folder", ""),
+                    final_data.get("base_dir", ""),
+                    final_data.get(
+                        "created_at",
+                        existing["created_at"] if existing else datetime.now().isoformat(),
+                    ),
+                    datetime.now().isoformat(),
+                ),
+            )
+
         self._queue_write(_do_upsert)
 
     def get_project(self, project_id: str) -> Optional[Dict]:
@@ -461,27 +497,30 @@ class StorageManager:
     def log_event(self, event_type: str, model_id: str, details: Dict):
         def _do_log(conn):
             ts = datetime.now().isoformat()
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO audit_log (timestamp, event_type, model_id, details)
                 VALUES (?, ?, ?, ?)
-            """, (
-                ts,
-                event_type,
-                model_id,
-                orjson.dumps(details).decode('utf-8')
-            ))
+            """,
+                (ts, event_type, model_id, orjson.dumps(details).decode("utf-8")),
+            )
             if self.audit_log_path:
                 try:
                     with self.audit_log_path.open("a", encoding="utf-8") as f:
-                        f.write(orjson.dumps({
-                            "timestamp": ts,
-                            "event_type": event_type,
-                            "model_id": model_id,
-                            "details": details,
-                        }) + "\n")
+                        f.write(
+                            orjson.dumps(
+                                {
+                                    "timestamp": ts,
+                                    "event_type": event_type,
+                                    "model_id": model_id,
+                                    "details": details,
+                                }
+                            )
+                            + "\n"
+                        )
                 except Exception as e:
                     log.error(f"Failed to write audit log file: {e}")
-        
+
         self._queue_write(_do_log)
 
     def get_recent_events(self, limit: int = 100) -> List[Dict]:
@@ -498,24 +537,37 @@ class StorageManager:
 
     # ── Context RAG Methods (Phase 3) ────────────────────────────────────────
 
-    def add_context_item(self, key: str, value: str, source_agent: str, confidence: float = 1.0, project_id: str = None):
+    def add_context_item(
+        self,
+        key: str,
+        value: str,
+        source_agent: str,
+        confidence: float = 1.0,
+        project_id: str = None,
+    ):
         def _do_add(conn):
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO context_items (key, value, source_agent, confidence_score, timestamp, project_id)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (key, value, source_agent, confidence, datetime.now().isoformat(), project_id))
-        
+            """,
+                (key, value, source_agent, confidence, datetime.now().isoformat(), project_id),
+            )
+
         self._queue_write(_do_add)
 
     def search_context(self, query: str, limit: int = 10) -> List[Dict]:
         with self._get_conn() as conn:
             cur = conn.cursor()
             # Simple LIKE-based keyword search for now
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT * FROM context_items 
                 WHERE key LIKE ? OR value LIKE ? 
                 ORDER BY timestamp DESC LIMIT ?
-            """, (f"%{query}%", f"%{query}%", limit))
+            """,
+                (f"%{query}%", f"%{query}%", limit),
+            )
             return [dict(row) for row in cur.fetchall()]
 
     def get_all_context(self, limit: int = 50) -> List[Dict]:
