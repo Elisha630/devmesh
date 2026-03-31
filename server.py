@@ -9,6 +9,7 @@ Single entry point. Run this one file and:
   - Tasks are broadcast from the browser chat to all connected agents
 """
 
+import argparse
 import asyncio
 import json
 import shutil
@@ -213,6 +214,9 @@ class DevMeshServer:
         # ✅ FIX 5: Throttle full state pushes to prevent excessive serialization
         self._last_full_state_push: float = 0.0
         self._full_state_push_interval: float = 0.5  # milliseconds between full state pushes
+        
+        # Track server start time for uptime metrics
+        self.start_time: float = time.time()
         
         # New Storage Layer
         db_path = cfg.audit_log_dir / "devmesh.db"
@@ -1490,6 +1494,40 @@ class DevMeshServer:
             return []
         return entries
 
+    def _get_health_status(self) -> Dict:
+        """Get health status for /health endpoint."""
+        return {
+            "status": "healthy",
+            "timestamp": self._ts(),
+            "connected_agents": len(self.agents),
+            "recent_tasks": self.storage.get_recent_tasks(10),
+        }
+    
+    def _get_metrics(self) -> Dict:
+        """Get metrics for /metrics endpoint."""
+        # Count tasks by status
+        all_tasks = self.storage.get_recent_tasks(1000)
+        tasks_by_status = {}
+        for task in all_tasks:
+            status = task.get("status", "unknown")
+            tasks_by_status[status] = tasks_by_status.get(status, 0) + 1
+        
+        # Count connected agents
+        connected_count = len(self.agents)
+        
+        # Count locks held
+        locks_held = sum(len(locks) for locks in self.locks.values())
+        
+        # Calculate uptime
+        uptime_seconds = time.time() - self.start_time
+        
+        return {
+            "tasks_by_status": tasks_by_status,
+            "connected_agents": connected_count,
+            "locks_held": locks_held,
+            "uptime_seconds": round(uptime_seconds, 2),
+        }
+
     def _make_http_handler(self, dashboard_path: Path):
         server = self
         from urllib.parse import urlparse, parse_qs
@@ -1526,6 +1564,28 @@ class DevMeshServer:
                         log.debug(f"Folder API error: {e}")
                         handler.send_response(500)
                         handler.end_headers()
+                elif handler.path == "/health":
+                    try:
+                        health = server._get_health_status()
+                        handler.send_response(200)
+                        handler.send_header("Content-type", "application/json")
+                        handler.end_headers()
+                        handler.wfile.write(json.dumps(health).encode())
+                    except Exception as e:
+                        log.error(f"Health check error: {e}")
+                        handler.send_response(500)
+                        handler.end_headers()
+                elif handler.path == "/metrics":
+                    try:
+                        metrics = server._get_metrics()
+                        handler.send_response(200)
+                        handler.send_header("Content-type", "application/json")
+                        handler.end_headers()
+                        handler.wfile.write(json.dumps(metrics).encode())
+                    except Exception as e:
+                        log.error(f"Metrics error: {e}")
+                        handler.send_response(500)
+                        handler.end_headers()
                 else:
                     handler.send_response(404)
                     handler.end_headers()
@@ -1538,7 +1598,41 @@ async def main():
     server = DevMeshServer()
     await server.run()
 
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="DevMesh v3.0 — Local Multi-Agent Orchestration Server")
+    parser.add_argument("--port", "-p", type=int, default=None,
+                        help="Override HTTP port (default: 7701)")
+    parser.add_argument("--ws-port", type=int, default=None,
+                        help="Override WebSocket port (default: 7700)")
+    parser.add_argument("--no-browser", action="store_true",
+                        help="Skip auto-opening browser")
+    parser.add_argument("--log-level", type=str, default=None,
+                        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                        help="Set logging level")
+    return parser.parse_args()
+
+def apply_cli_overrides(args):
+    """Apply CLI argument overrides to environment variables."""
+    import os
+    if args.port:
+        os.environ["DEVMESH_HTTP_PORT"] = str(args.port)
+    if args.ws_port:
+        os.environ["DEVMESH_WS_PORT"] = str(args.ws_port)
+    if args.no_browser:
+        os.environ["DEVMESH_AUTO_OPEN_BROWSER"] = "false"
+    if args.log_level:
+        os.environ["DEVMESH_LOG_LEVEL"] = args.log_level
+
 if __name__ == "__main__":
+    args = parse_args()
+    apply_cli_overrides(args)
+    
+    # Re-initialize config after applying overrides
+    from config import get_server_config
+    cfg = get_server_config()
+    log = setup_logging(log_level=cfg.log_level, log_file=cfg.log_file)
+    
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
