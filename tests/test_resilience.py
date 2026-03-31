@@ -141,6 +141,7 @@ class TestRetryWithBackoff:
     @pytest.mark.asyncio
     async def test_retry_exhausted(self):
         """Should raise RetryExhausted after max attempts."""
+
         @retry_with_backoff(max_attempts=3, base_delay=0.01)
         async def always_fail():
             raise ValueError("Always fails")
@@ -156,11 +157,7 @@ class TestRetryWithBackoff:
         """Should only retry on specified exceptions."""
         call_count = 0
 
-        @retry_with_backoff(
-            max_attempts=3,
-            base_delay=0.01,
-            retryable_exceptions=(ValueError,)
-        )
+        @retry_with_backoff(max_attempts=3, base_delay=0.01, retryable_exceptions=(ValueError,))
         async def raise_type_error():
             nonlocal call_count
             call_count += 1
@@ -179,11 +176,7 @@ class TestRetryWithBackoff:
         def on_retry(attempt, delay, error):
             callback_calls.append((attempt, delay, error))
 
-        @retry_with_backoff(
-            max_attempts=3,
-            base_delay=0.1,
-            on_retry=on_retry
-        )
+        @retry_with_backoff(max_attempts=3, base_delay=0.1, on_retry=on_retry)
         async def fail_twice():
             if len(callback_calls) < 2:
                 raise ValueError("Fail")
@@ -346,10 +339,7 @@ class TestRetryScenarios:
             delays.append(delay)
 
         @retry_with_backoff(
-            max_attempts=4,
-            base_delay=0.1,
-            exponential_base=2.0,
-            on_retry=record_delay
+            max_attempts=4, base_delay=0.1, exponential_base=2.0, on_retry=record_delay
         )
         async def always_fail():
             raise ValueError("Fail")

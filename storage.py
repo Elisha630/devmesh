@@ -388,12 +388,8 @@ class StorageManager:
                 final_data.get("created_at", existing["created_at"] if existing else datetime.now().isoformat()),
                 final_data.get("completed_at"),
                 final_data.get("result_summary"),
-<<<<<<< HEAD
-                orjson.dumps(final_data.get("details", {})).decode('utf-8')
-=======
-                json.dumps(final_data.get("details", {})),
+                orjson.dumps(final_data.get("details", {})).decode('utf-8'),
                 priority
->>>>>>> 965ee552306782a8c378ba4c22e29bfad0b33338
             ))
         
         self._queue_write(_do_upsert)

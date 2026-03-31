@@ -13,6 +13,7 @@ import time
 
 class TaskState(Enum):
     """Task lifecycle states."""
+
     QUEUED = "queued"
     CLAIMED = "claimed"
     WORKING = "working"
@@ -24,6 +25,7 @@ class TaskState(Enum):
 
 class LockType(Enum):
     """Types of file/resource locks."""
+
     READ = "read"
     WRITE = "write"
     INTENT = "intent"
@@ -40,6 +42,7 @@ RULEBOOK = {
 @dataclass
 class AgentInfo:
     """Represents a connected AI agent."""
+
     model: str
     version: Optional[str]
     capabilities: Dict
@@ -56,6 +59,7 @@ class AgentInfo:
 @dataclass
 class LockInfo:
     """Represents a file/resource lock."""
+
     target: str
     lock_type: LockType
     holder: str
@@ -66,6 +70,7 @@ class LockInfo:
 @dataclass
 class TaskInfo:
     """Represents a task in the system."""
+
     task_id: str
     description: str
     file: str
@@ -87,6 +92,7 @@ class TaskInfo:
 @dataclass
 class ContextBufferEntry:
     """Represents a file in the context buffer."""
+
     file_path: str
     content: str
     version: int = 0
@@ -143,6 +149,7 @@ class HardwareThrottle:
 @dataclass
 class FrameworkState:
     """Framework state for task execution."""
+
     status: str = "idle"
     ready: bool = False
     task_id: Optional[str] = None

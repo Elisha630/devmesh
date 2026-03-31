@@ -27,7 +27,9 @@ class CollectorRegistry:
 
 
 class _BaseMetric:
-    def __init__(self, name: str, registry: Optional[CollectorRegistry] = None, **_: object) -> None:
+    def __init__(
+        self, name: str, registry: Optional[CollectorRegistry] = None, **_: object
+    ) -> None:
         self.name = name
         self._registry = registry
         if registry is not None:
@@ -56,7 +58,13 @@ class Counter(_BaseMetric):
 
 
 class Gauge(_BaseMetric):
-    def __init__(self, name: str, documentation: str = "", registry: Optional[CollectorRegistry] = None, **kwargs: object) -> None:
+    def __init__(
+        self,
+        name: str,
+        documentation: str = "",
+        registry: Optional[CollectorRegistry] = None,
+        **kwargs: object,
+    ) -> None:
         super().__init__(name, registry=registry)
         self._value = 0.0
 
@@ -65,7 +73,13 @@ class Gauge(_BaseMetric):
 
 
 class Histogram(_BaseMetric):
-    def __init__(self, name: str, documentation: str = "", registry: Optional[CollectorRegistry] = None, **kwargs: object) -> None:
+    def __init__(
+        self,
+        name: str,
+        documentation: str = "",
+        registry: Optional[CollectorRegistry] = None,
+        **kwargs: object,
+    ) -> None:
         super().__init__(name, registry=registry)
         self._values: List[float] = []
 
@@ -78,4 +92,3 @@ def generate_latest(registry: Optional[CollectorRegistry] = None) -> bytes:
     # Provide a minimal, valid text format.
     _ = registry
     return b"# prometheus_client shim\n"
-

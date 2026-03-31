@@ -124,14 +124,17 @@ class AgentManager:
 
         # Persist to storage
         if self.storage:
-            self.storage.upsert_agent(model, {
-                "session_id": session_id,
-                "role": role,
-                "status": agent.status,
-                "is_active": 1,
-                "connected_at": agent.connected_at,
-                "hardware_usage": agent.resource_request,
-            })
+            self.storage.upsert_agent(
+                model,
+                {
+                    "session_id": session_id,
+                    "role": role,
+                    "status": agent.status,
+                    "is_active": 1,
+                    "connected_at": agent.connected_at,
+                    "hardware_usage": agent.resource_request,
+                },
+            )
 
         if self._on_agent_registered:
             self._on_agent_registered(model)
@@ -252,10 +255,7 @@ class AgentManager:
 
     def get_active_agents(self) -> List[AgentInfo]:
         """Get all active (non-disconnected) agents."""
-        return [
-            a for a in self.agents.values()
-            if a.status != "disconnected"
-        ]
+        return [a for a in self.agents.values() if a.status != "disconnected"]
 
     def get_all_agents(self) -> List[AgentInfo]:
         """Get all agents including disconnected."""
@@ -289,10 +289,7 @@ class AgentManager:
 
     def get_available_agents(self) -> List[AgentInfo]:
         """Get agents available for task assignment."""
-        return [
-            a for a in self.agents.values()
-            if a.status == "idle"
-        ]
+        return [a for a in self.agents.values() if a.status == "idle"]
 
     def set_agent_task(self, model: str, task_id: str = None) -> bool:
         """Set or clear the current task for an agent.

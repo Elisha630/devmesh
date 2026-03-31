@@ -39,6 +39,7 @@ class TokenBucket:
     Token bucket rate limiter.
     Allows bursts up to capacity, then rate-limited to refill rate.
     """
+
     capacity: int = 10
     refill_rate: float = 1.0  # tokens per second
     _tokens: float = field(default=0.0, init=False)
@@ -53,10 +54,7 @@ class TokenBucket:
         async with self._lock:
             now = time.time()
             elapsed = now - self._last_refill
-            self._tokens = min(
-                self.capacity,
-                self._tokens + elapsed * self.refill_rate
-            )
+            self._tokens = min(self.capacity, self._tokens + elapsed * self.refill_rate)
             self._last_refill = now
 
             if self._tokens >= tokens:
@@ -76,6 +74,7 @@ class SlidingWindow:
     Sliding window rate limiter.
     Tracks timestamps in a window and enforces a maximum count.
     """
+
     max_requests: int = 10
     window_seconds: float = 60.0
     _requests: deque = field(default_factory=deque, init=False)
@@ -111,9 +110,7 @@ class SlidingWindow:
         allowed, _, retry_after = await self.is_allowed()
         if not allowed:
             raise RateLimitExceeded(
-                retry_after=retry_after,
-                limit=self.max_requests,
-                window=self.window_seconds
+                retry_after=retry_after, limit=self.max_requests, window=self.window_seconds
             )
 
 
@@ -161,15 +158,14 @@ class RateLimiter:
     def _create_bucket(self, config: dict) -> TokenBucket:
         """Create a token bucket from config."""
         return TokenBucket(
-            capacity=config.get("capacity", 10),
-            refill_rate=config.get("refill_rate", 1.0)
+            capacity=config.get("capacity", 10), refill_rate=config.get("refill_rate", 1.0)
         )
 
     def _create_window(self, config: dict) -> SlidingWindow:
         """Create a sliding window from config."""
         return SlidingWindow(
             max_requests=config.get("max_requests", 10),
-            window_seconds=config.get("window_seconds", 60.0)
+            window_seconds=config.get("window_seconds", 60.0),
         )
 
     async def check(self, endpoint: str, identifier: str) -> None:
@@ -196,7 +192,7 @@ class RateLimiter:
                 raise RateLimitExceeded(
                     retry_after=1.0 / config.get("refill_rate", 1.0),
                     limit=config.get("capacity", 10),
-                    window=config.get("capacity", 10) / config.get("refill_rate", 1.0)
+                    window=config.get("capacity", 10) / config.get("refill_rate", 1.0),
                 )
 
         elif config["type"] == "sliding_window":
@@ -243,8 +239,7 @@ class RateLimiter:
         self._config[endpoint] = config
         # Clear existing limiters for this endpoint
         keys_to_remove = [
-            k for k in {**self._buckets, **self._windows}.keys()
-            if k.startswith(f"{endpoint}:")
+            k for k in {**self._buckets, **self._windows}.keys() if k.startswith(f"{endpoint}:")
         ]
         for key in keys_to_remove:
             self._buckets.pop(key, None)
@@ -254,8 +249,7 @@ class RateLimiter:
         """Reset rate limiters. If endpoint specified, only reset that endpoint."""
         if endpoint:
             keys_to_remove = [
-                k for k in {**self._buckets, **self._windows}.keys()
-                if k.startswith(f"{endpoint}:")
+                k for k in {**self._buckets, **self._windows}.keys() if k.startswith(f"{endpoint}:")
             ]
             for key in keys_to_remove:
                 self._buckets.pop(key, None)
@@ -285,6 +279,7 @@ def rate_limit(endpoint: str, identifier_func: Optional[Callable] = None):
         endpoint: The rate limit endpoint category
         identifier_func: Optional function to extract identifier from args
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -303,4 +298,5 @@ def rate_limit(endpoint: str, identifier_func: Optional[Callable] = None):
         # Attach rate limiter methods to function for testing
         wrapper.rate_limiter = limiter
         return wrapper
+
     return decorator

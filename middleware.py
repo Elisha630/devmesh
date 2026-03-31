@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler
 @dataclass
 class CORSConfig:
     """CORS configuration."""
+
     allow_origins: Set[str] = None
     allow_methods: Set[str] = None
     allow_headers: Set[str] = None
@@ -95,17 +96,12 @@ class SecurityHeadersMiddleware:
         # Handle preflight request
         if handler.command == "OPTIONS":
             handler.send_header(
-                "Access-Control-Allow-Methods",
-                ", ".join(self.cors_config.allow_methods)
+                "Access-Control-Allow-Methods", ", ".join(self.cors_config.allow_methods)
             )
             handler.send_header(
-                "Access-Control-Allow-Headers",
-                ", ".join(self.cors_config.allow_headers)
+                "Access-Control-Allow-Headers", ", ".join(self.cors_config.allow_headers)
             )
-            handler.send_header(
-                "Access-Control-Max-Age",
-                str(self.cors_config.max_age)
-            )
+            handler.send_header("Access-Control-Max-Age", str(self.cors_config.max_age))
             return True
 
         return False
@@ -113,9 +109,11 @@ class SecurityHeadersMiddleware:
 
 def add_security_headers(func: Callable) -> Callable:
     """Decorator to add security headers to handler methods."""
+
     def wrapper(self, *args, **kwargs):
         result = func(self, *args, **kwargs)
         return result
+
     return wrapper
 
 

@@ -18,9 +18,7 @@ class TestAgentRegistration:
         am = AgentManager()
 
         agent, is_reconnect, session_id = am.register_agent(
-            model="claude-test",
-            version="1.0",
-            capabilities={"languages": ["python"]}
+            model="claude-test", version="1.0", capabilities={"languages": ["python"]}
         )
 
         assert agent is not None
@@ -76,19 +74,13 @@ class TestAgentReconnection:
         am.storage = storage_mock
 
         # First registration
-        _, _, session_id = am.register_agent(
-            model="test-agent",
-            session_id="session-123"
-        )
+        _, _, session_id = am.register_agent(model="test-agent", session_id="session-123")
 
         # Simulate disconnect
         am.mark_disconnected("test-agent")
 
         # Reconnect with same session
-        agent, is_reconnect, _ = am.register_agent(
-            model="test-agent",
-            session_id="session-123"
-        )
+        agent, is_reconnect, _ = am.register_agent(model="test-agent", session_id="session-123")
 
         assert is_reconnect is True
         assert agent.status != "disconnected"
@@ -100,10 +92,7 @@ class TestAgentReconnection:
         am.register_agent(model="test-agent", session_id="session-1")
 
         # New registration with different session
-        _, is_reconnect, _ = am.register_agent(
-            model="test-agent",
-            session_id="session-2"
-        )
+        _, is_reconnect, _ = am.register_agent(model="test-agent", session_id="session-2")
 
         assert is_reconnect is False
 
@@ -190,6 +179,7 @@ class TestAgentDisconnection:
         am.mark_disconnected("agent-2")
 
         import time
+
         time.sleep(0.02)
 
         expired = am.get_expired_grace_periods()
@@ -278,10 +268,7 @@ class TestHardwareIntegration:
         hw = HardwareThrottle(max_vram=16, max_ram=32)
         am.hardware = hw
 
-        am.register_agent(
-            model="test-agent",
-            resource_request={"vram_gb": 4, "ram_gb": 8}
-        )
+        am.register_agent(model="test-agent", resource_request={"vram_gb": 4, "ram_gb": 8})
 
         assert hw.used_vram == 4.0
         assert hw.used_ram == 8.0
@@ -292,10 +279,7 @@ class TestHardwareIntegration:
         hw = HardwareThrottle(max_vram=16, max_ram=32)
         am.hardware = hw
 
-        am.register_agent(
-            model="test-agent",
-            resource_request={"vram_gb": 4, "ram_gb": 8}
-        )
+        am.register_agent(model="test-agent", resource_request={"vram_gb": 4, "ram_gb": 8})
         am.remove_agent("test-agent")
 
         assert hw.used_vram == 0.0
@@ -308,8 +292,7 @@ class TestHardwareIntegration:
         am.hardware = hw
 
         agent, _, _ = am.register_agent(
-            model="test-agent",
-            resource_request={"vram_gb": 4, "ram_gb": 8}
+            model="test-agent", resource_request={"vram_gb": 4, "ram_gb": 8}
         )
 
         assert agent.status == "suspended"

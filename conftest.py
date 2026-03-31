@@ -46,4 +46,3 @@ def _reset_rate_limiter() -> None:
     except Exception:
         # If rate limiting isn't available for some reason, don't block tests.
         pass
-

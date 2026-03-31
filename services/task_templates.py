@@ -23,6 +23,7 @@ __all__ = [
 @dataclass
 class TaskTemplate:
     """A task template with variable substitution."""
+
     template_id: str
     name: str
     description: str
@@ -34,24 +35,24 @@ class TaskTemplate:
     required_capabilities: List[str] = field(default_factory=list)
     variables: Dict[str, Any] = field(default_factory=dict)  # Variable: default value
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    
+
     def render(self, bindings: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         """Render template with variable bindings."""
         bindings = bindings or {}
-        
+
         # Validate required variables
         for var_name, var_info in self.variables.items():
             if isinstance(var_info, dict) and var_info.get("required", False):
                 if var_name not in bindings:
                     raise ValueError(f"Required variable not provided: {var_name}")
-        
+
         # Substitute variables
         context = {
             var_name: bindings.get(var_name, var_info if isinstance(var_info, str) else "")
             for var_name, var_info in self.variables.items()
         }
         context.update(bindings)  # Override with provided bindings
-        
+
         return {
             "description": self.description_template.format(**context),
             "working_dir": self.working_dir_template.format(**context),
@@ -64,14 +65,14 @@ class TaskTemplate:
 
 class TemplateManager:
     """Manages task templates."""
-    
+
     def __init__(self):
         self.templates: Dict[str, TaskTemplate] = {}
         self._built_in_templates = self._create_built_in_templates()
         # Load built-in templates
         for template in self._built_in_templates:
             self.templates[template.template_id] = template
-    
+
     def _create_built_in_templates(self) -> List[TaskTemplate]:
         """Create built-in templates for common tasks."""
         return [
@@ -95,7 +96,9 @@ class TemplateManager:
                 operation="review",
                 variables={
                     "path": {"required": True, "description": "Code file to review"},
-                    "focus": {"description": "Specific focus area (e.g., 'security', 'performance')"},
+                    "focus": {
+                        "description": "Specific focus area (e.g., 'security', 'performance')"
+                    },
                 },
             ),
             TaskTemplate(
@@ -135,31 +138,31 @@ class TemplateManager:
                 },
             ),
         ]
-    
+
     def register_template(self, template: TaskTemplate) -> None:
         """Register a custom template."""
         self.templates[template.template_id] = template
         log.info(f"Template registered: {template.template_id}")
-    
+
     def unregister_template(self, template_id: str) -> bool:
         """Unregister a template (custom only, not built-in)."""
         if template_id.startswith("_"):  # Don't allow unregistering built-in
             return False
-        
+
         if template_id in self.templates:
             del self.templates[template_id]
             log.info(f"Template unregistered: {template_id}")
             return True
         return False
-    
+
     def get_template(self, template_id: str) -> Optional[TaskTemplate]:
         """Get a template by ID."""
         return self.templates.get(template_id)
-    
+
     def list_templates(self) -> List[TaskTemplate]:
         """List all templates."""
         return list(self.templates.values())
-    
+
     def create_task_from_template(
         self,
         template_id: str,
@@ -169,16 +172,16 @@ class TemplateManager:
         template = self.get_template(template_id)
         if not template:
             raise ValueError(f"Template not found: {template_id}")
-        
+
         task_dict = template.render(bindings)
         return task_dict
-    
+
     def export_template(self, template_id: str) -> Dict[str, Any]:
         """Export a template as a dictionary."""
         template = self.get_template(template_id)
         if not template:
             return {}
-        
+
         return {
             "template_id": template.template_id,
             "name": template.name,

@@ -64,14 +64,17 @@ class TaskManager:
 
         # Persist to storage
         if self.storage:
-            self.storage.upsert_task(task_id, {
-                "description": task.description,
-                "status": task.status.value,
-                "owner_model": task.owner_model,
-                "working_dir": task.working_dir,
-                "file_target": task.file,
-                "created_at": task.created_at,
-            })
+            self.storage.upsert_task(
+                task_id,
+                {
+                    "description": task.description,
+                    "status": task.status.value,
+                    "owner_model": task.owner_model,
+                    "working_dir": task.working_dir,
+                    "file_target": task.file,
+                    "created_at": task.created_at,
+                },
+            )
 
         if self._on_task_created:
             self._on_task_created(task)
@@ -108,11 +111,14 @@ class TaskManager:
 
         # Persist to storage
         if self.storage:
-            self.storage.upsert_task(task_id, {
-                "owner_model": model,
-                "status": task.status.value,
-                "claimed_at": task.claimed_at,
-            })
+            self.storage.upsert_task(
+                task_id,
+                {
+                    "owner_model": model,
+                    "status": task.status.value,
+                    "claimed_at": task.claimed_at,
+                },
+            )
 
         if self._on_task_claimed:
             self._on_task_claimed(task_id, model)
@@ -149,8 +155,10 @@ class TaskManager:
 
         # Check critic requirement
         if task.critic_required:
-            if not approved_by or approved_by == task.owner_model or approved_by not in getattr(
-                self, "_agent_models", {}
+            if (
+                not approved_by
+                or approved_by == task.owner_model
+                or approved_by not in getattr(self, "_agent_models", {})
             ):
                 return False, "critic_required"
             task.critic_model = approved_by
@@ -160,11 +168,14 @@ class TaskManager:
 
         # Persist to storage
         if self.storage:
-            self.storage.upsert_task(task_id, {
-                "status": task.status.value,
-                "completed_at": task.completed_at,
-                "result_summary": summary,
-            })
+            self.storage.upsert_task(
+                task_id,
+                {
+                    "status": task.status.value,
+                    "completed_at": task.completed_at,
+                    "result_summary": summary,
+                },
+            )
 
         if self._on_task_completed:
             self._on_task_completed(task_id)
@@ -185,10 +196,13 @@ class TaskManager:
 
         # Persist to storage
         if self.storage:
-            self.storage.upsert_task(task_id, {
-                "status": task.status.value,
-                "owner_model": None,
-            })
+            self.storage.upsert_task(
+                task_id,
+                {
+                    "status": task.status.value,
+                    "owner_model": None,
+                },
+            )
 
         return True, "success"
 
@@ -227,9 +241,7 @@ class TaskManager:
 
                 # Persist to storage
                 if self.storage:
-                    self.storage.upsert_task(
-                        task.task_id, {"status": task.status.value}
-                    )
+                    self.storage.upsert_task(task.task_id, {"status": task.status.value})
 
         return resumed
 
@@ -265,8 +277,7 @@ class TaskManager:
     def get_active_tasks(self) -> List[TaskInfo]:
         """Get all active (claimed or working) tasks."""
         return [
-            t for t in self.tasks.values()
-            if t.status in {TaskState.CLAIMED, TaskState.WORKING}
+            t for t in self.tasks.values() if t.status in {TaskState.CLAIMED, TaskState.WORKING}
         ]
 
     def get_queued_tasks(self) -> List[TaskInfo]:

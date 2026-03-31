@@ -28,8 +28,9 @@ log = logging.getLogger("devmesh.resilience")
 
 class CircuitState(Enum):
     """Circuit breaker states."""
-    CLOSED = "closed"      # Normal operation
-    OPEN = "open"          # Failing, rejecting requests
+
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing, rejecting requests
     HALF_OPEN = "half_open"  # Testing if service recovered
 
 
@@ -40,8 +41,7 @@ class CircuitBreakerOpen(Exception):
         self.service = service
         self.retry_after = retry_after
         super().__init__(
-            f"Circuit breaker open for '{service}'. "
-            f"Retry after {retry_after:.1f}s"
+            f"Circuit breaker open for '{service}'. " f"Retry after {retry_after:.1f}s"
         )
 
 
@@ -57,10 +57,11 @@ class RetryExhausted(Exception):
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for circuit breaker."""
-    failure_threshold: int = 5          # Failures before opening
-    recovery_timeout: float = 30.0       # Seconds before half-open
-    half_open_max_calls: int = 3         # Test calls in half-open
-    success_threshold: int = 2           # Successes to close
+
+    failure_threshold: int = 5  # Failures before opening
+    recovery_timeout: float = 30.0  # Seconds before half-open
+    half_open_max_calls: int = 3  # Test calls in half-open
+    success_threshold: int = 2  # Successes to close
 
 
 class CircuitBreaker:
@@ -70,11 +71,7 @@ class CircuitBreaker:
     Prevents cascading failures by stopping requests to failing services.
     """
 
-    def __init__(
-        self,
-        name: str,
-        config: Optional[CircuitBreakerConfig] = None
-    ):
+    def __init__(self, name: str, config: Optional[CircuitBreakerConfig] = None):
         self.name = name
         self.config = config or CircuitBreakerConfig()
         self.state = CircuitState.CLOSED
@@ -138,9 +135,7 @@ class CircuitBreaker:
         self.state = CircuitState.OPEN
         self.successes = 0
         self.half_open_calls = 0
-        log.warning(
-            f"Circuit '{self.name}' opened after {self.failures} failures"
-        )
+        log.warning(f"Circuit '{self.name}' opened after {self.failures} failures")
 
     def _reset(self):
         """Reset circuit breaker to CLOSED state."""
@@ -193,6 +188,7 @@ def retry_with_backoff(
         retryable_exceptions: Tuple of exceptions to retry on
         on_retry: Optional callback function called on retry
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
@@ -207,10 +203,7 @@ def retry_with_backoff(
                         break
 
                     # Calculate delay with exponential backoff
-                    delay = min(
-                        base_delay * (exponential_base ** (attempt - 1)),
-                        max_delay
-                    )
+                    delay = min(base_delay * (exponential_base ** (attempt - 1)), max_delay)
 
                     log.warning(
                         f"Retry {attempt}/{max_attempts} for {func.__name__} "
@@ -225,11 +218,7 @@ def retry_with_backoff(
 
                     await asyncio.sleep(delay)
 
-            raise RetryExhausted(
-                f"Function '{func.__name__}' failed",
-                max_attempts,
-                last_error
-            )
+            raise RetryExhausted(f"Function '{func.__name__}' failed", max_attempts, last_error)
 
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
@@ -243,10 +232,7 @@ def retry_with_backoff(
                     if attempt == max_attempts:
                         break
 
-                    delay = min(
-                        base_delay * (exponential_base ** (attempt - 1)),
-                        max_delay
-                    )
+                    delay = min(base_delay * (exponential_base ** (attempt - 1)), max_delay)
 
                     log.warning(
                         f"Retry {attempt}/{max_attempts} for {func.__name__} "
@@ -261,19 +247,17 @@ def retry_with_backoff(
 
                     time.sleep(delay)
 
-            raise RetryExhausted(
-                f"Function '{func.__name__}' failed",
-                max_attempts,
-                last_error
-            )
+            raise RetryExhausted(f"Function '{func.__name__}' failed", max_attempts, last_error)
 
         return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
+
     return decorator
 
 
 @dataclass
 class HealthStatus:
     """Health check status."""
+
     name: str
     status: str  # "healthy", "degraded", "unhealthy"
     message: str
@@ -302,17 +286,16 @@ class ServiceHealth:
         """Run a specific health check."""
         if name not in self.checks:
             return HealthStatus(
-                name=name,
-                status="unhealthy",
-                message="Health check not registered",
-                latency_ms=0.0
+                name=name, status="unhealthy", message="Health check not registered", latency_ms=0.0
             )
 
         start = time.time()
         try:
-            result = await self.checks[name]() if asyncio.iscoroutinefunction(
-                self.checks[name]
-            ) else self.checks[name]()
+            result = (
+                await self.checks[name]()
+                if asyncio.iscoroutinefunction(self.checks[name])
+                else self.checks[name]()
+            )
 
             latency_ms = (time.time() - start) * 1000
 
@@ -323,11 +306,7 @@ class ServiceHealth:
                 details = {}
 
             health = HealthStatus(
-                name=name,
-                status=status,
-                message=message,
-                latency_ms=latency_ms,
-                details=details
+                name=name, status=status, message=message, latency_ms=latency_ms, details=details
             )
         except Exception as e:
             latency_ms = (time.time() - start) * 1000
@@ -335,7 +314,7 @@ class ServiceHealth:
                 name=name,
                 status="unhealthy",
                 message=f"Health check failed: {e}",
-                latency_ms=latency_ms
+                latency_ms=latency_ms,
             )
 
         async with self._lock:
@@ -376,7 +355,7 @@ class ServiceHealth:
                     "details": status.details,
                 }
                 for name, status in self.results.items()
-            }
+            },
         }
 
 
@@ -397,12 +376,12 @@ retry_network = functools.partial(
     retry_with_backoff,
     max_attempts=3,
     base_delay=1.0,
-    retryable_exceptions=(ConnectionError, TimeoutError, OSError)
+    retryable_exceptions=(ConnectionError, TimeoutError, OSError),
 )
 
 retry_cli = functools.partial(
     retry_with_backoff,
     max_attempts=2,
     base_delay=0.5,
-    retryable_exceptions=(subprocess.CalledProcessError,)
+    retryable_exceptions=(subprocess.CalledProcessError,),
 )

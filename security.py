@@ -25,16 +25,19 @@ from dataclasses import dataclass
 
 class SecurityError(Exception):
     """Base security exception."""
+
     pass
 
 
 class ValidationError(SecurityError):
     """Input validation failed."""
+
     pass
 
 
 class PathTraversalError(SecurityError):
     """Path traversal attempt detected."""
+
     pass
 
 
@@ -45,18 +48,18 @@ MAX_PATH_LENGTH = 4096
 MAX_FILE_CONTENT_SIZE = 50 * 1024 * 1024  # 50MB
 
 # Forbidden characters in shell contexts
-SHELL_FORBIDDEN_CHARS = re.compile(r'[;|&$`\\]')
-SHELL_CONTROL_CHARS = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
+SHELL_FORBIDDEN_CHARS = re.compile(r"[;|&$`\\]")
+SHELL_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 # Allowed model name pattern
-MODEL_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
+MODEL_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 # Path traversal patterns
 PATH_TRAVERSAL_PATTERNS = [
-    re.compile(r'\.\.[/\\]'),  # ../ or ..\
-    re.compile(r'[/\\]\.\.'),  # /.. or \..
-    re.compile(r'^\.\.'),  # Starts with ..
-    re.compile(r'\.{2,}'),  # Three or more dots
+    re.compile(r"\.\.[/\\]"),  # ../ or ..\
+    re.compile(r"[/\\]\.\."),  # /.. or \..
+    re.compile(r"^\.\."),  # Starts with ..
+    re.compile(r"\.{2,}"),  # Three or more dots
 ]
 
 
@@ -84,7 +87,7 @@ def sanitize_path(path: str | Path, base_dir: Optional[Path] = None) -> Path:
         raise ValidationError(f"Path exceeds maximum length of {MAX_PATH_LENGTH}")
 
     # Check for null bytes
-    if '\x00' in path_str:
+    if "\x00" in path_str:
         raise PathTraversalError("Path contains null bytes")
 
     # Check for path traversal patterns
@@ -101,9 +104,7 @@ def sanitize_path(path: str | Path, base_dir: Optional[Path] = None) -> Path:
         try:
             resolved.relative_to(base)
         except ValueError:
-            raise PathTraversalError(
-                f"Path {resolved} is outside allowed base directory {base}"
-            )
+            raise PathTraversalError(f"Path {resolved} is outside allowed base directory {base}")
     else:
         resolved = Path(path_str).expanduser().resolve()
 
@@ -131,19 +132,17 @@ def validate_task_input(task_text: str) -> str:
 
     # Check length
     if len(task_text) > MAX_TASK_LENGTH:
-        raise ValidationError(
-            f"Task text exceeds maximum length of {MAX_TASK_LENGTH} characters"
-        )
+        raise ValidationError(f"Task text exceeds maximum length of {MAX_TASK_LENGTH} characters")
 
     # Remove control characters
-    sanitized = SHELL_CONTROL_CHARS.sub('', task_text)
+    sanitized = SHELL_CONTROL_CHARS.sub("", task_text)
 
     # Check for suspicious patterns (but don't block - just warn via logging)
     suspicious = [
-        r'rm\s+-rf',
-        r':\s*\{\s*:\s*\}',  # Bash fork bomb
-        r'\$\(.*?\)',  # Command substitution
-        r'`.*?`',  # Backtick command substitution
+        r"rm\s+-rf",
+        r":\s*\{\s*:\s*\}",  # Bash fork bomb
+        r"\$\(.*?\)",  # Command substitution
+        r"`.*?`",  # Backtick command substitution
     ]
 
     return sanitized
@@ -164,7 +163,7 @@ def sanitize_shell_input(value: str) -> str:
         value = str(value)
 
     # Remove control characters
-    value = SHELL_CONTROL_CHARS.sub('', value)
+    value = SHELL_CONTROL_CHARS.sub("", value)
 
     # Use shlex.quote to escape for shell
     return shlex.quote(value)
@@ -214,9 +213,7 @@ def validate_model_name(model: str) -> str:
         raise ValidationError("Model name must be a string")
 
     if len(model) > MAX_MODEL_NAME_LENGTH:
-        raise ValidationError(
-            f"Model name exceeds maximum length of {MAX_MODEL_NAME_LENGTH}"
-        )
+        raise ValidationError(f"Model name exceeds maximum length of {MAX_MODEL_NAME_LENGTH}")
 
     if not MODEL_NAME_PATTERN.match(model):
         raise ValidationError(
@@ -264,23 +261,49 @@ def validate_working_dir(working_dir: str) -> Path:
 @dataclass(frozen=True)
 class SecurityConfig:
     """Security configuration settings."""
+
     max_task_length: int = MAX_TASK_LENGTH
     max_model_name_length: int = MAX_MODEL_NAME_LENGTH
     max_path_length: int = MAX_PATH_LENGTH
     max_file_content_size: int = MAX_FILE_CONTENT_SIZE
-    allowed_extensions: frozenset = frozenset([
-        '.py', '.js', '.ts', '.jsx', '.tsx', '.json', '.yaml', '.yml',
-        '.md', '.txt', '.toml', '.ini', '.cfg', '.rs', '.go', '.java',
-        '.kt', '.swift', '.c', '.cpp', '.h', '.hpp', '.rb', '.php',
-    ])
-    forbidden_commands: frozenset = frozenset([
-        'rm -rf /',
-        'rm -rf /*',
-        ':(){ :|:& };:',  # Fork bomb
-        'dd if=/dev/zero',
-        'mkfs',
-        'fdisk',
-    ])
+    allowed_extensions: frozenset = frozenset(
+        [
+            ".py",
+            ".js",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            ".json",
+            ".yaml",
+            ".yml",
+            ".md",
+            ".txt",
+            ".toml",
+            ".ini",
+            ".cfg",
+            ".rs",
+            ".go",
+            ".java",
+            ".kt",
+            ".swift",
+            ".c",
+            ".cpp",
+            ".h",
+            ".hpp",
+            ".rb",
+            ".php",
+        ]
+    )
+    forbidden_commands: frozenset = frozenset(
+        [
+            "rm -rf /",
+            "rm -rf /*",
+            ":(){ :|:& };:",  # Fork bomb
+            "dd if=/dev/zero",
+            "mkfs",
+            "fdisk",
+        ]
+    )
 
 
 # Default security config

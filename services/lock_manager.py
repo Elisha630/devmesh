@@ -38,10 +38,7 @@ class LockManager:
             # Write requires exclusive ownership.
             # Lock upgrades (e.g. READ -> WRITE) are treated as conflicts
             # even when requested by the same holder.
-            return any(
-                (l.lock_type != LockType.WRITE) or (l.holder != requester)
-                for l in existing
-            )
+            return any((l.lock_type != LockType.WRITE) or (l.holder != requester) for l in existing)
 
         if lock_type == LockType.CO_WRITE:
             # Co-write conflicts with non-co-write locks
@@ -49,9 +46,7 @@ class LockManager:
 
         return True
 
-    def acquire(
-        self, target: str, lock_type: LockType, holder: str
-    ) -> Optional[LockInfo]:
+    def acquire(self, target: str, lock_type: LockType, holder: str) -> Optional[LockInfo]:
         """Acquire a lock if no conflict exists.
 
         Returns the LockInfo on success, None if conflict.
@@ -74,9 +69,7 @@ class LockManager:
             return False
 
         original_count = len(self.locks[target])
-        self.locks[target] = [
-            l for l in self.locks[target] if l.holder != holder
-        ]
+        self.locks[target] = [l for l in self.locks[target] if l.holder != holder]
         released = len(self.locks[target]) < original_count
 
         # Clean up empty lock lists
@@ -156,8 +149,6 @@ class LockManager:
     def to_dict(self) -> Dict:
         """Serialize locks to dictionary for state export."""
         return {
-            target: [
-                {"holder": l.holder, "type": l.lock_type.value} for l in locks
-            ]
+            target: [{"holder": l.holder, "type": l.lock_type.value} for l in locks]
             for target, locks in self.locks.items()
         }

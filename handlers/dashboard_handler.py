@@ -29,7 +29,9 @@ class DashboardWebSocketHandler:
             client_ip = ws.remote_address[0] if ws.remote_address else "unknown"
             await rate_limiter.check("ws_message", client_ip)
         except RateLimitExceeded:
-            self.server.log.warning(f"Rate limit exceeded for dashboard connection from {client_ip}")
+            self.server.log.warning(
+                f"Rate limit exceeded for dashboard connection from {client_ip}"
+            )
             await ws.close(code=1008, reason="Rate limit exceeded")
             return
 
@@ -85,7 +87,7 @@ class DashboardWebSocketHandler:
             reply = {
                 "sender": "system",
                 "text": f"⚠ Invalid task: {e}",
-                "timestamp": self.server._ts()
+                "timestamp": self.server._ts(),
             }
             self.server.chat_log.append(reply)
             await self.push({"type": "chat_message", "data": reply})
@@ -100,7 +102,7 @@ class DashboardWebSocketHandler:
             reply = {
                 "sender": "system",
                 "text": f"⚠ Rate limit exceeded. Retry after {e.retry_after:.0f}s",
-                "timestamp": self.server._ts()
+                "timestamp": self.server._ts(),
             }
             self.server.chat_log.append(reply)
             await self.push({"type": "chat_message", "data": reply})
@@ -114,7 +116,7 @@ class DashboardWebSocketHandler:
                 reply = {
                     "sender": "system",
                     "text": f"⚠ Working directory not found: {working_dir}. Using /tmp instead.",
-                    "timestamp": self.server._ts()
+                    "timestamp": self.server._ts(),
                 }
                 self.server.chat_log.append(reply)
                 await self.push({"type": "chat_message", "data": reply})
@@ -124,7 +126,7 @@ class DashboardWebSocketHandler:
             reply = {
                 "sender": "system",
                 "text": f"⚠ Invalid working directory. Using /tmp instead.",
-                "timestamp": self.server._ts()
+                "timestamp": self.server._ts(),
             }
             self.server.chat_log.append(reply)
             await self.push({"type": "chat_message", "data": reply})
@@ -136,7 +138,7 @@ class DashboardWebSocketHandler:
             "sender": "user",
             "text": text,
             "working_dir": working_dir,
-            "timestamp": self.server._ts()
+            "timestamp": self.server._ts(),
         }
         self.server.chat_log.append(entry)
 
@@ -149,21 +151,26 @@ class DashboardWebSocketHandler:
         }
         self.server._audit({"event": "framework_pending", "working_dir": project_dir, "text": text})
 
-        await self.server._broadcast_agents({
-            "event": "framework_pending",
-            "working_dir": project_dir,
-            "task_text": text,
-            "from": "dashboard",
-            "timestamp": entry["timestamp"],
-        })
+        await self.server._broadcast_agents(
+            {
+                "event": "framework_pending",
+                "working_dir": project_dir,
+                "task_text": text,
+                "from": "dashboard",
+                "timestamp": entry["timestamp"],
+            }
+        )
 
         if self.server.architect:
-            await self.server._send_to_agent(self.server.architect, {
-                "event": "framework_request",
-                "task_text": text,
-                "working_dir": project_dir,
-                "timestamp": entry["timestamp"],
-            })
+            await self.server._send_to_agent(
+                self.server.architect,
+                {
+                    "event": "framework_request",
+                    "task_text": text,
+                    "working_dir": project_dir,
+                    "timestamp": entry["timestamp"],
+                },
+            )
 
         await self.push({"type": "chat_message", "data": entry})
 
@@ -172,24 +179,26 @@ class DashboardWebSocketHandler:
             reply = {
                 "sender": "system",
                 "text": "⚠ No agents connected. Connect an agent first, then send the task.",
-                "timestamp": self.server._ts()
+                "timestamp": self.server._ts(),
             }
         else:
             n = len(self.server.agents)
             reply = {
                 "sender": "system",
                 "text": f"Framework gate started for {n} agent{'s' if n != 1 else ''} in {project_dir}",
-                "timestamp": self.server._ts()
+                "timestamp": self.server._ts(),
             }
 
             if not self.server.architect:
-                await self.server._broadcast_agents({
-                    "event": "task_instruction",
-                    "text": text,
-                    "working_dir": project_dir,
-                    "from": "dashboard_direct",
-                    "timestamp": entry["timestamp"],
-                })
+                await self.server._broadcast_agents(
+                    {
+                        "event": "task_instruction",
+                        "text": text,
+                        "working_dir": project_dir,
+                        "from": "dashboard_direct",
+                        "timestamp": entry["timestamp"],
+                    }
+                )
 
         self.server.chat_log.append(reply)
         await self.push({"type": "chat_message", "data": reply})
@@ -204,6 +213,7 @@ class DashboardWebSocketHandler:
     async def _handle_rescan_tools(self):
         """Handle tool rescan request."""
         from server import detect_installed_tools
+
         self.server.detected_tools = detect_installed_tools()
         await self.push(self.server._full_state())
 
@@ -237,10 +247,7 @@ class DashboardWebSocketHandler:
         if not self.clients:
             return
         msg = orjson.dumps(payload)
-        await asyncio.gather(
-            *[c.send(msg) for c in self.clients],
-            return_exceptions=True
-        )
+        await asyncio.gather(*[c.send(msg) for c in self.clients], return_exceptions=True)
 
     async def push_throttled(self, payload: Dict):
         """Push to dashboard with throttling for full state updates."""
@@ -254,8 +261,8 @@ class DashboardWebSocketHandler:
 
         if is_full_state:
             now = time.time()
-            interval = getattr(self.server, '_full_state_push_interval', 0.5)
-            last_push = getattr(self.server, '_last_full_state_push', 0.0)
+            interval = getattr(self.server, "_full_state_push_interval", 0.5)
+            last_push = getattr(self.server, "_last_full_state_push", 0.0)
 
             if now - last_push >= interval:
                 self.server._last_full_state_push = now

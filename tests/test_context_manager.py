@@ -90,4 +90,3 @@ def test_get_file_info_clear_and_get_entry():
     assert cm.get_entry("/a.py") is not None
     assert cm.clear_path("/a.py") is True
     assert cm.get_entry("/a.py") is None
-

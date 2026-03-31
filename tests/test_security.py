@@ -9,6 +9,7 @@ from pathlib import Path
 
 # Import the security module
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from security import (
@@ -187,6 +188,7 @@ class TestSecurityConfig:
     def test_default_config_exists(self):
         """Test that default config is available."""
         from security import DEFAULT_SECURITY_CONFIG
+
         assert DEFAULT_SECURITY_CONFIG is not None
         assert DEFAULT_SECURITY_CONFIG.max_task_length > 0
         assert DEFAULT_SECURITY_CONFIG.max_path_length > 0

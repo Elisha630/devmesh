@@ -31,7 +31,14 @@ from enum import Enum
 
 import orjson
 import websockets
-from prometheus_client import Counter, Histogram, Gauge, CollectorRegistry, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import (
+    Counter,
+    Histogram,
+    Gauge,
+    CollectorRegistry,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+)
 
 from config import get_server_config, KNOWN_CLI_TOOLS, TOOL_PROFILES
 from logger import setup_logging
@@ -44,29 +51,32 @@ log = setup_logging(log_level=cfg.log_level, log_file=cfg.log_file)
 
 class ReusableHTTPServer(HTTPServer):
     """HTTPServer with SO_REUSEADDR to allow quick restarts."""
+
     allow_reuse_address = True
-    
+
     def server_bind(self):
         """Override to set SO_REUSEADDR socket option."""
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         super().server_bind()
 
+
 # ── Domain models ──────────────────────────────────────────────────────────
 
+
 class TaskState(Enum):
-    QUEUED    = "queued"
-    CLAIMED   = "claimed"
-    WORKING   = "working"
-    PAUSED    = "paused"
+    QUEUED = "queued"
+    CLAIMED = "claimed"
+    WORKING = "working"
+    PAUSED = "paused"
     COMPLETED = "completed"
-    FAILED    = "failed"
+    FAILED = "failed"
     ABANDONED = "abandoned"
 
 
 class LockType(Enum):
-    READ     = "read"
-    WRITE    = "write"
-    INTENT   = "intent"
+    READ = "read"
+    WRITE = "write"
+    INTENT = "intent"
     CO_WRITE = "co_write"
 
 
@@ -78,9 +88,20 @@ RULEBOOK = {
 
 @dataclass
 class AgentInfo:
-    __slots__ = ('model', 'version', 'capabilities', 'role', 'websocket_id', 'session_id', 
-                 'connected_at', 'last_seen', 'resource_request', 'status', 'current_task')
-    
+    __slots__ = (
+        "model",
+        "version",
+        "capabilities",
+        "role",
+        "websocket_id",
+        "session_id",
+        "connected_at",
+        "last_seen",
+        "resource_request",
+        "status",
+        "current_task",
+    )
+
     model: str
     version: Optional[str]
     capabilities: Dict
@@ -96,8 +117,8 @@ class AgentInfo:
 
 @dataclass
 class LockInfo:
-    __slots__ = ('target', 'lock_type', 'holder', 'acquired_at', 'last_heartbeat')
-    
+    __slots__ = ("target", "lock_type", "holder", "acquired_at", "last_heartbeat")
+
     target: str
     lock_type: LockType
     holder: str
@@ -107,10 +128,25 @@ class LockInfo:
 
 @dataclass
 class TaskInfo:
-    __slots__ = ('task_id', 'description', 'file', 'operation', 'working_dir', 'priority', 'status',
-                 'owner_model', 'depends_on', 'required_capabilities', 'critic_required', 
-                 'critic_model', 'created_by', 'created_at', 'claimed_at', 'completed_at')
-    
+    __slots__ = (
+        "task_id",
+        "description",
+        "file",
+        "operation",
+        "working_dir",
+        "priority",
+        "status",
+        "owner_model",
+        "depends_on",
+        "required_capabilities",
+        "critic_required",
+        "critic_model",
+        "created_by",
+        "created_at",
+        "claimed_at",
+        "completed_at",
+    )
+
     task_id: str
     description: str
     file: str
@@ -131,8 +167,8 @@ class TaskInfo:
 
 @dataclass
 class ContextBufferEntry:
-    __slots__ = ('file_path', 'content', 'version', 'last_updated', 'last_writer', 'diffs')
-    
+    __slots__ = ("file_path", "content", "version", "last_updated", "last_writer", "diffs")
+
     file_path: str
     content: str
     version: int = 0
@@ -144,9 +180,9 @@ class ContextBufferEntry:
 class HardwareThrottle:
     def __init__(self, max_vram: float, max_ram: float):
         self.max_vram = max_vram
-        self.max_ram  = max_ram
+        self.max_ram = max_ram
         self.used_vram = 0.0
-        self.used_ram  = 0.0
+        self.used_ram = 0.0
         self.allocations: Dict[str, Dict] = {}
 
     def allocate(self, model: str, req: Dict) -> bool:
@@ -158,7 +194,7 @@ class HardwareThrottle:
         if self.used_vram + v > self.max_vram or self.used_ram + r > self.max_ram:
             return False
         self.used_vram += v
-        self.used_ram  += r
+        self.used_ram += r
         self.allocations[model] = {"vram": v, "ram": r}
         return True
 
@@ -166,12 +202,12 @@ class HardwareThrottle:
         if model in self.allocations:
             a = self.allocations.pop(model)
             self.used_vram -= a["vram"]
-            self.used_ram  -= a["ram"]
+            self.used_ram -= a["ram"]
 
     def status(self) -> Dict:
         return {
             "vram": {"used": round(self.used_vram, 2), "total": self.max_vram},
-            "ram":  {"used": round(self.used_ram, 2), "total": self.max_ram},
+            "ram": {"used": round(self.used_ram, 2), "total": self.max_ram},
         }
 
 
@@ -182,59 +218,41 @@ METRICS_REGISTRY = CollectorRegistry()
 
 # Counters
 task_counter = Counter(
-    'devmesh_tasks_total',
-    'Total tasks processed',
-    ['status'],
-    registry=METRICS_REGISTRY
+    "devmesh_tasks_total", "Total tasks processed", ["status"], registry=METRICS_REGISTRY
 )
 
 agent_connections = Counter(
-    'devmesh_agent_connections_total',
-    'Total agent connections',
-    ['action'],  # 'connected', 'disconnected'
-    registry=METRICS_REGISTRY
+    "devmesh_agent_connections_total",
+    "Total agent connections",
+    ["action"],  # 'connected', 'disconnected'
+    registry=METRICS_REGISTRY,
 )
 
 # Gauges
 active_agents = Gauge(
-    'devmesh_active_agents',
-    'Number of currently connected agents',
-    registry=METRICS_REGISTRY
+    "devmesh_active_agents", "Number of currently connected agents", registry=METRICS_REGISTRY
 )
 
 active_tasks = Gauge(
-    'devmesh_active_tasks',
-    'Number of tasks in progress',
-    registry=METRICS_REGISTRY
+    "devmesh_active_tasks", "Number of tasks in progress", registry=METRICS_REGISTRY
 )
 
-vram_used = Gauge(
-    'devmesh_vram_used_gb',
-    'GPU VRAM used in GB',
-    registry=METRICS_REGISTRY
-)
+vram_used = Gauge("devmesh_vram_used_gb", "GPU VRAM used in GB", registry=METRICS_REGISTRY)
 
-ram_used = Gauge(
-    'devmesh_ram_used_gb',
-    'System RAM used in GB',
-    registry=METRICS_REGISTRY
-)
+ram_used = Gauge("devmesh_ram_used_gb", "System RAM used in GB", registry=METRICS_REGISTRY)
 
 # Histograms
 task_duration = Histogram(
-    'devmesh_task_duration_seconds',
-    'Task execution duration',
-    registry=METRICS_REGISTRY
+    "devmesh_task_duration_seconds", "Task execution duration", registry=METRICS_REGISTRY
 )
 
 lock_wait_time = Histogram(
-    'devmesh_lock_wait_seconds',
-    'Time spent waiting for locks',
-    registry=METRICS_REGISTRY
+    "devmesh_lock_wait_seconds", "Time spent waiting for locks", registry=METRICS_REGISTRY
 )
 
 
 # ── RLE Compression for Hardware History ──────────────────────────────────
+
 
 def compress_hw_history(history: List[Dict]) -> List[Dict]:
     """
@@ -243,13 +261,13 @@ def compress_hw_history(history: List[Dict]) -> List[Dict]:
     """
     if not history:
         return []
-    
+
     compressed = [history[0]]
     for item in history[1:]:
         # If current item differs from last compressed item, add it
         if item != compressed[-1]:
             compressed.append(item)
-    
+
     return compressed
 
 
@@ -267,7 +285,9 @@ def detect_installed_tools():
             try:
                 result = subprocess.run(
                     [tool["cmd"], "--version"],
-                    capture_output=True, text=True, timeout=cfg.ai_cli_version_timeout_sec
+                    capture_output=True,
+                    text=True,
+                    timeout=cfg.ai_cli_version_timeout_sec,
                 )
                 version = (result.stdout or result.stderr or "").strip().split("\n")[0][:60]
             except Exception:
@@ -278,20 +298,21 @@ def detect_installed_tools():
 
 # ── Server ─────────────────────────────────────────────────────────────────
 
+
 class DevMeshServer:
     def __init__(self):
-        self.agent_clients: Set     = set()
-        self.dash_clients: Set      = set()
-        self.agents: Dict[str, AgentInfo]         = {}
-        self.locks:  Dict[str, List[LockInfo]]    = {}
-        self.tasks:  Dict[str, TaskInfo]          = {}
-        self.ctx:    Dict[str, ContextBufferEntry] = {}
-        self.architect: Optional[str]             = None
+        self.agent_clients: Set = set()
+        self.dash_clients: Set = set()
+        self.agents: Dict[str, AgentInfo] = {}
+        self.locks: Dict[str, List[LockInfo]] = {}
+        self.tasks: Dict[str, TaskInfo] = {}
+        self.ctx: Dict[str, ContextBufferEntry] = {}
+        self.architect: Optional[str] = None
         self._ws_counter = 0
         self.hw = HardwareThrottle(cfg.gpu_vram_gb, cfg.ram_gb)
         self.file_subs: Dict[str, Set[str]] = {}
-        self.chat_log:  List[Dict]          = []
-        self.event_log: List[Dict]          = []
+        self.chat_log: List[Dict] = []
+        self.event_log: List[Dict] = []
         # Keep a rolling history for the dashboard.
         self.hw_history: List[Dict] = []
         self._hw_sample_task: Optional[asyncio.Task] = None
@@ -301,25 +322,25 @@ class DevMeshServer:
 
         # Guard against infinite conflict-resolution loops per (file) hot path.
         self._conflict_resolve_guard: Dict[str, float] = {}
-        self.detected_tools: List[Dict]     = detect_installed_tools()
+        self.detected_tools: List[Dict] = detect_installed_tools()
         self.launched_procs: Dict[str, subprocess.Popen] = {}
         self._agent_stderr_paths: Dict[str, str] = {}  # Track stderr log files
         self.http_server: Optional[HTTPServer] = None
-        
+
         # ✅ FIX 5: Throttle full state pushes to prevent excessive serialization
         self._last_full_state_push: float = 0.0
         self._full_state_push_interval: float = 0.5  # milliseconds between full state pushes
-        
+
         # Track server start time for uptime metrics
         self.start_time: float = time.time()
-        
+
         # New Storage Layer
         db_path = cfg.audit_log_dir / "devmesh.db"
         self.storage = StorageManager(db_path, audit_log_path=cfg.audit_log_path)
-        
+
         # Migrate legacy memory.json if exists
         self._migrate_legacy_memory()
-        
+
         # ✅ FIX 1: Clear any agents left over from a previous run
         self._reset_stale_agents()
 
@@ -337,24 +358,26 @@ class DevMeshServer:
             try:
                 with open(legacy_path, "r") as f:
                     mem = json.load(f)
-                
+
                 # Migrate projects
                 for base_dir, projs in mem.get("projects", {}).items():
                     for p in projs:
-                        self.storage.upsert_project(p.get("id", f"mig_{int(time.time())}"), {
-                            "name": p.get("name"),
-                            "folder": p.get("folder"),
-                            "base_dir": base_dir,
-                            "created_at": p.get("created_at"),
-                            "last_used_at": p.get("last_used_at")
-                        })
-                
+                        self.storage.upsert_project(
+                            p.get("id", f"mig_{int(time.time())}"),
+                            {
+                                "name": p.get("name"),
+                                "folder": p.get("folder"),
+                                "base_dir": base_dir,
+                                "created_at": p.get("created_at"),
+                                "last_used_at": p.get("last_used_at"),
+                            },
+                        )
+
                 # Migrate agents metadata
                 for model, data in mem.get("agents", {}).items():
-                    self.storage.upsert_agent(model, {
-                        "status": "offline",
-                        "last_seen": data.get("last_seen")
-                    })
+                    self.storage.upsert_agent(
+                        model, {"status": "offline", "last_seen": data.get("last_seen")}
+                    )
 
                 # Rename old file instead of deleting
                 legacy_path.rename(legacy_path.with_suffix(".json.bak"))
@@ -392,10 +415,12 @@ class DevMeshServer:
 
     async def _broadcast_roster(self):
         """Tell all agents who's connected (coordination signal)."""
-        await self._broadcast_agents({
-            "event": "agent_roster",
-            "roster": self._agent_roster(),
-        })
+        await self._broadcast_agents(
+            {
+                "event": "agent_roster",
+                "roster": self._agent_roster(),
+            }
+        )
 
     async def _send_to_agent(self, model: str, payload: Dict):
         """Send a payload to one agent by model id."""
@@ -445,7 +470,9 @@ class DevMeshServer:
 
         # If reasonably similar, reuse existing project folder.
         if best_match and best_score >= 0.6 and best_match.get("folder"):
-            self.storage.upsert_project(best_match["project_id"], {"last_used_at": datetime.now().isoformat()})
+            self.storage.upsert_project(
+                best_match["project_id"], {"last_used_at": datetime.now().isoformat()}
+            )
             return best_match["folder"]
 
         # Otherwise create a new folder for this project.
@@ -462,19 +489,22 @@ class DevMeshServer:
             return base_dir
 
         project_id = f"proj_{int(time.time())}"
-        self.storage.upsert_project(project_id, {
-            "name": task_text,
-            "folder": str(project_path),
-            "base_dir": base_dir,
-            "created_at": datetime.now().isoformat(),
-        })
+        self.storage.upsert_project(
+            project_id,
+            {
+                "name": task_text,
+                "folder": str(project_path),
+                "base_dir": base_dir,
+                "created_at": datetime.now().isoformat(),
+            },
+        )
         return str(project_path)
 
     def _audit(self, ev: Dict):
         model_id = ev.get("model") or ev.get("by") or ev.get("owner_model") or "server"
         event_type = ev.get("event", "unknown")
         self.storage.log_event(event_type, model_id, ev)
-        
+
         # Also log to event log for UI
         ev["timestamp"] = datetime.now().isoformat()
         self.event_log.append(ev)
@@ -486,37 +516,44 @@ class DevMeshServer:
 
     def _serialize_task(self, t: TaskInfo) -> Dict:
         return {
-            "task_id": t.task_id, "description": t.description,
-            "file": t.file, "operation": t.operation,
+            "task_id": t.task_id,
+            "description": t.description,
+            "file": t.file,
+            "operation": t.operation,
             "working_dir": t.working_dir,
-            "priority": t.priority, "status": t.status.value,
-            "owner_model": t.owner_model, "depends_on": t.depends_on,
+            "priority": t.priority,
+            "status": t.status.value,
+            "owner_model": t.owner_model,
+            "depends_on": t.depends_on,
             "required_capabilities": t.required_capabilities,
-            "critic_required": t.critic_required, "critic_model": t.critic_model,
-            "created_by": t.created_by, "created_at": t.created_at,
-            "claimed_at": t.claimed_at, "completed_at": t.completed_at,
+            "critic_required": t.critic_required,
+            "critic_model": t.critic_model,
+            "created_by": t.created_by,
+            "created_at": t.created_at,
+            "claimed_at": t.claimed_at,
+            "completed_at": t.completed_at,
         }
 
     def _full_state(self) -> Dict:
         # Merge active agents with persistent agent data
         all_agents = self.storage.get_all_agents()
         agent_map = {}
-        
+
         # First add agents from storage (including inactive ones for history)
         for a in all_agents:
             agent_map[a["model_id"]] = a
-        
+
         # Overlay in-memory agents (active connections)
         for model, info in self.agents.items():
             agent_map[model] = {
-                "model_id": model, 
-                "role": info.role, 
+                "model_id": model,
+                "role": info.role,
                 "status": info.status,
-                "current_task": info.current_task, 
+                "current_task": info.current_task,
                 "connected_at": info.connected_at,
                 "is_active": 1,
             }
-        
+
         # Filter to only include active agents (is_active: 1)
         active_agents = {k: v for k, v in agent_map.items() if v.get("is_active") == 1}
 
@@ -530,15 +567,17 @@ class DevMeshServer:
         return {
             "type": "state",
             "agents": active_agents,
-            "tasks":  task_map,
-            "locks":  {t: [{"holder": l.holder, "type": l.lock_type.value} for l in ls]
-                       for t, ls in self.locks.items()},
-            "hardware":      self.hw.status(),
+            "tasks": task_map,
+            "locks": {
+                t: [{"holder": l.holder, "type": l.lock_type.value} for l in ls]
+                for t, ls in self.locks.items()
+            },
+            "hardware": self.hw.status(),
             "hardware_history": self.hw_history,
             "detected_tools": self.detected_tools,
             "memory": {"context": self.storage.get_all_context(20)},
-            "chat_log":      self.chat_log[-100:],
-            "event_log":     self.event_log[-100:],
+            "chat_log": self.chat_log[-100:],
+            "event_log": self.event_log[-100:],
         }
 
     async def _broadcast_agents(self, payload: Dict):
@@ -564,16 +603,16 @@ class DevMeshServer:
 
     async def _push_dash_throttled(self, payload: Dict):
         """Push to dashboard with throttling for full state updates to avoid serialization overhead.
-        
+
         If payload contains a full state (_full_state result), throttle to ~500ms intervals.
         Other payloads go through immediately.
         """
         if not self.dash_clients:
             return
-        
+
         # Check if this is a full state push (has 'agents', 'tasks', 'locks' keys)
         is_full_state = "agents" in payload and "tasks" in payload and "locks" in payload
-        
+
         if is_full_state:
             now = time.time()
             if now - self._last_full_state_push >= self._full_state_push_interval:
@@ -589,14 +628,14 @@ class DevMeshServer:
     async def _register(self, ws, data: Dict) -> Dict:
         model = data.get("model", "unknown")
         session_id = data.get("session_id")
-        
+
         # Check if this is a reconnection
         existing_agent = self.storage.get_agent(model)
         is_reconnect = False
         if existing_agent and session_id and existing_agent.get("session_id") == session_id:
             log.info(f"Agent {model} reconnecting with session {session_id}")
             is_reconnect = True
-        
+
         if is_reconnect and existing_agent:
             role = existing_agent.get("role", "agent")
         else:
@@ -606,11 +645,13 @@ class DevMeshServer:
 
         self._ws_counter += 1
         agent = AgentInfo(
-            model=model, version=data.get("version"),
+            model=model,
+            version=data.get("version"),
             capabilities=data.get("capabilities", {}),
-            role=role, websocket_id=self._ws_counter,
+            role=role,
+            websocket_id=self._ws_counter,
             resource_request=data.get("resources", {}),
-            session_id=session_id
+            session_id=session_id,
         )
         self.agents[model] = agent
         ws._agent_id = self._ws_counter
@@ -667,30 +708,45 @@ class DevMeshServer:
                 agent.session_id = session_id
 
         # Persist agent registration
-        self.storage.upsert_agent(model, {
-            "session_id": session_id,
-            "role": role,
-            "status": agent.status,
-            "is_active": 1,
-            "connected_at": agent.connected_at,
-            "hardware_usage": agent.resource_request
-        })
+        self.storage.upsert_agent(
+            model,
+            {
+                "session_id": session_id,
+                "role": role,
+                "status": agent.status,
+                "is_active": 1,
+                "connected_at": agent.connected_at,
+                "hardware_usage": agent.resource_request,
+            },
+        )
 
-        await self._broadcast_agents({"event": "agent_registered", "model": model,
-                                       "role": role, "status": agent.status, "time": time.time()})
+        await self._broadcast_agents(
+            {
+                "event": "agent_registered",
+                "model": model,
+                "role": role,
+                "status": agent.status,
+                "time": time.time(),
+            }
+        )
         asyncio.create_task(self._broadcast_roster())
         asyncio.create_task(self._push_dash(self._full_state()))
         self._audit({"event": "register", "model": model, "role": role, "reconnect": is_reconnect})
-        
-        return {"event": "registered", "model": model, "role": role, "session_id": session_id,
-                "rulebook": RULEBOOK, 
-                "memory": {
-                    "agents": self.storage.get_all_agents(), 
-                    "recent_tasks": self.storage.get_recent_tasks(20),
-                    "context": self.storage.get_all_context(20)
-                },
-                "roster": self._agent_roster(),
-                "hardware_status": self.hw.status()}
+
+        return {
+            "event": "registered",
+            "model": model,
+            "role": role,
+            "session_id": session_id,
+            "rulebook": RULEBOOK,
+            "memory": {
+                "agents": self.storage.get_all_agents(),
+                "recent_tasks": self.storage.get_recent_tasks(20),
+                "context": self.storage.get_all_context(20),
+            },
+            "roster": self._agent_roster(),
+            "hardware_status": self.hw.status(),
+        }
 
     def _lock_conflict(self, target: str, lt: LockType, requester: str) -> bool:
         existing = self.locks.get(target, [])
@@ -699,8 +755,10 @@ class DevMeshServer:
         if lt == LockType.READ:
             return any(l.lock_type == LockType.WRITE for l in existing)
         if lt == LockType.INTENT:
-            return any(l.lock_type in {LockType.INTENT, LockType.WRITE}
-                       and l.holder != requester for l in existing)
+            return any(
+                l.lock_type in {LockType.INTENT, LockType.WRITE} and l.holder != requester
+                for l in existing
+            )
         if lt == LockType.WRITE:
             return any(l.holder != requester for l in existing)
         if lt == LockType.CO_WRITE:
@@ -720,13 +778,16 @@ class DevMeshServer:
         if self._lock_conflict(target, lt, model):
             return {"event": "lock_denied", "target": target, "retry_after_ms": 2000}
 
-        self.locks.setdefault(target, []).append(LockInfo(target=target, lock_type=lt, holder=model))
+        self.locks.setdefault(target, []).append(
+            LockInfo(target=target, lock_type=lt, holder=model)
+        )
         if lt in {LockType.READ, LockType.WRITE}:
             self.agents[model].status = "reading" if lt == LockType.READ else "writing"
             self.agents[model].current_task = target
 
-        await self._broadcast_agents({"event": "lock_granted", "model": model,
-                                       "target": target, "type": lt.value})
+        await self._broadcast_agents(
+            {"event": "lock_granted", "model": model, "target": target, "type": lt.value}
+        )
         self._audit({"event": "lock_granted", "model": model, "target": target, "type": lt.value})
         asyncio.create_task(self._push_dash(self._full_state()))
         return {"event": "lock_granted", "target": target, "type": lt.value}
@@ -754,7 +815,7 @@ class DevMeshServer:
         operation = data.get("operation", "write")
 
         entry = self.ctx.get(path) or ContextBufferEntry(file_path=path, content=content)
-        
+
         # Conflict Detection (Phase 4)
         conflict_detected = False
         if entry.last_writer and entry.last_writer != model:
@@ -763,7 +824,9 @@ class DevMeshServer:
                 previous_writer = entry.last_writer
                 log.warning(f"Conflict detected on {path} between {model} and {entry.last_writer}")
                 conflict_detected = True
-                self._audit({"event": "conflict_detected", "path": path, "agents": [model, previous_writer]})
+                self._audit(
+                    {"event": "conflict_detected", "path": path, "agents": [model, previous_writer]}
+                )
 
                 # Lightweight diff arbitration scaffolding: ask a critic agent to re-write the artifact.
                 # Note: the current AgentBridge always writes an "output artifact"; to support true
@@ -793,7 +856,8 @@ class DevMeshServer:
                             "Previous writer artifact snapshot (truncated):\n"
                             f"{prev_content}\n\n"
                             "Previous diffs (last few, truncated):\n"
-                            +("\n".join(prev_diffs)[-6000:] if prev_diffs else "(no prior diffs)") + "\n\n"
+                            + ("\n".join(prev_diffs)[-6000:] if prev_diffs else "(no prior diffs)")
+                            + "\n\n"
                             "New incoming diff (truncated):\n"
                             f"{new_diff}\n\n"
                             "Output requirements:\n"
@@ -802,19 +866,24 @@ class DevMeshServer:
                             "- Prefer correctness and completeness over minimality.\n"
                         )
                         working_dir = str(Path(path).parent)
-                        await self._send_to_agent(critic_model, {
-                            "event": "task_instruction",
-                            "text": resolve_text,
-                            "working_dir": working_dir,
-                            "target_file": path,
-                            "conflict": {"between": [previous_writer, model]},
-                        })
+                        await self._send_to_agent(
+                            critic_model,
+                            {
+                                "event": "task_instruction",
+                                "text": resolve_text,
+                                "working_dir": working_dir,
+                                "target_file": path,
+                                "conflict": {"between": [previous_writer, model]},
+                            },
+                        )
 
         entry.version += 1
         entry.last_updated = time.time()
         entry.last_writer = model
-        if content: entry.content = content
-        if diff: entry.diffs.append(diff)
+        if content:
+            entry.content = content
+        if diff:
+            entry.diffs.append(diff)
         self.ctx[path] = entry
 
         if path in self.file_subs:
@@ -822,21 +891,29 @@ class DevMeshServer:
                 aid = getattr(c, "_agent_id", None)
                 for ag in self.agents.values():
                     if ag.websocket_id == aid and ag.model in self.file_subs[path]:
-                        await c.send(orjson.dumps({
-                            "event": "file_changed", "path": path,
-                            "operation": operation, "by": model,
-                            "version": entry.version,
-                            "conflict": conflict_detected
-                        }))
-        
-        self._audit({
-            "event": "file_changed",
-            "model": model,
-            "path": path,
-            "operation": operation,
-            "stdout": str(stdout)[:20000] if stdout else "",
-            "stderr": str(stderr)[:20000] if stderr else "",
-        })
+                        await c.send(
+                            orjson.dumps(
+                                {
+                                    "event": "file_changed",
+                                    "path": path,
+                                    "operation": operation,
+                                    "by": model,
+                                    "version": entry.version,
+                                    "conflict": conflict_detected,
+                                }
+                            )
+                        )
+
+        self._audit(
+            {
+                "event": "file_changed",
+                "model": model,
+                "path": path,
+                "operation": operation,
+                "stdout": str(stdout)[:20000] if stdout else "",
+                "stderr": str(stderr)[:20000] if stderr else "",
+            }
+        )
         asyncio.create_task(self._push_dash_throttled(self._full_state()))
         return {
             "event": "file_change_ack",
@@ -852,24 +929,30 @@ class DevMeshServer:
             if not task_id or task_id in self.tasks:
                 return {"event": "error", "reason": "invalid_or_duplicate_task_id"}
             t = TaskInfo(
-                task_id=task_id, description=data.get("description", ""),
-                file=data.get("file", ""), operation=data.get("operation", "create"),
-                priority=data.get("priority", 1), depends_on=data.get("depends_on", []),
+                task_id=task_id,
+                description=data.get("description", ""),
+                file=data.get("file", ""),
+                operation=data.get("operation", "create"),
+                priority=data.get("priority", 1),
+                depends_on=data.get("depends_on", []),
                 required_capabilities=data.get("required_capabilities", []),
                 critic_required=data.get("critic_required", False),
                 created_by=model or "dashboard",
             )
             self.tasks[task_id] = t
-            
+
             # Persist task
-            self.storage.upsert_task(task_id, {
-                "description": t.description,
-                "status": t.status.value,
-                "owner_model": t.owner_model,
-                "working_dir": t.working_dir,
-                "file_target": t.file,
-                "created_at": t.created_at
-            })
+            self.storage.upsert_task(
+                task_id,
+                {
+                    "description": t.description,
+                    "status": t.status.value,
+                    "owner_model": t.owner_model,
+                    "working_dir": t.working_dir,
+                    "file_target": t.file,
+                    "created_at": t.created_at,
+                },
+            )
 
             self._audit({"event": "task_created", "task_id": task_id, "by": model})
             await self._broadcast_agents({"event": "task_created", "task": self._serialize_task(t)})
@@ -882,24 +965,23 @@ class DevMeshServer:
                 return {"event": "error", "reason": "task_not_found"}
             if t.status != TaskState.QUEUED or t.owner_model:
                 return {"event": "claim_denied", "reason": "not_available"}
-            
+
             deps_ok = all(
                 dep in self.tasks and self.tasks[dep].status == TaskState.COMPLETED
                 for dep in t.depends_on
             )
             if not deps_ok:
                 return {"event": "claim_denied", "reason": "dependency_not_ready"}
-            
+
             t.owner_model = model
             t.status = TaskState.CLAIMED
             t.claimed_at = datetime.now().isoformat()
-            
+
             # Persist update
-            self.storage.upsert_task(task_id, {
-                "owner_model": model,
-                "status": t.status.value,
-                "claimed_at": t.claimed_at
-            })
+            self.storage.upsert_task(
+                task_id,
+                {"owner_model": model, "status": t.status.value, "claimed_at": t.claimed_at},
+            )
 
             self._audit({"event": "task_claimed", "task_id": task_id, "by": model})
             await self._broadcast_agents({"event": "task_claimed", "task_id": task_id, "by": model})
@@ -911,7 +993,7 @@ class DevMeshServer:
             if not t or t.owner_model != model or t.status != TaskState.CLAIMED:
                 return {"event": "start_denied"}
             t.status = TaskState.WORKING
-            
+
             self.storage.upsert_task(task_id, {"status": t.status.value})
 
             self._audit({"event": "task_started", "task_id": task_id, "by": model})
@@ -925,21 +1007,28 @@ class DevMeshServer:
                 return {"event": "error", "reason": "task_not_found"}
             approved_by = data.get("approved_by")
             if t.critic_required:
-                if not approved_by or approved_by == t.owner_model or approved_by not in self.agents:
+                if (
+                    not approved_by
+                    or approved_by == t.owner_model
+                    or approved_by not in self.agents
+                ):
                     return {"event": "complete_denied", "reason": "critic_required"}
                 t.critic_model = approved_by
-            
+
             t.status = TaskState.COMPLETED
             t.completed_at = datetime.now().isoformat()
-            
+
             # Increment Prometheus counter
             task_counter.labels(status="completed").inc()
-            
-            self.storage.upsert_task(task_id, {
-                "status": t.status.value,
-                "completed_at": t.completed_at,
-                "result_summary": data.get("summary", "")
-            })
+
+            self.storage.upsert_task(
+                task_id,
+                {
+                    "status": t.status.value,
+                    "completed_at": t.completed_at,
+                    "result_summary": data.get("summary", ""),
+                },
+            )
 
             self._audit({"event": "task_completed", "task_id": task_id})
             await self._broadcast_agents({"event": "task_completed", "task_id": task_id})
@@ -952,7 +1041,7 @@ class DevMeshServer:
                 return {"event": "error", "reason": "task_not_found"}
             t.status = TaskState.ABANDONED
             t.owner_model = None
-            
+
             self.storage.upsert_task(task_id, {"status": t.status.value, "owner_model": None})
 
             self._audit({"event": "task_abandoned", "task_id": task_id})
@@ -969,8 +1058,10 @@ class DevMeshServer:
             return {"event": "error", "reason": "task_not_found"}
         if t.status != TaskState.QUEUED or t.owner_model:
             return {"event": "bid_denied"}
-        deps_ok = all(dep in self.tasks and self.tasks[dep].status == TaskState.COMPLETED
-                      for dep in t.depends_on)
+        deps_ok = all(
+            dep in self.tasks and self.tasks[dep].status == TaskState.COMPLETED
+            for dep in t.depends_on
+        )
         if not deps_ok:
             return {"event": "bid_denied", "reason": "dependency_not_ready"}
 
@@ -979,12 +1070,10 @@ class DevMeshServer:
         t.owner_model = best
         t.status = TaskState.CLAIMED
         t.claimed_at = datetime.now().isoformat()
-        
-        self.storage.upsert_task(task_id, {
-            "owner_model": best,
-            "status": t.status.value,
-            "claimed_at": t.claimed_at
-        })
+
+        self.storage.upsert_task(
+            task_id, {"owner_model": best, "status": t.status.value, "claimed_at": t.claimed_at}
+        )
 
         self._audit({"event": "task_awarded", "task_id": task_id, "to": best})
         await self._broadcast_agents({"event": "task_awarded", "task_id": task_id, "to": best})
@@ -1001,21 +1090,26 @@ class DevMeshServer:
             return
 
         ev = data.get("event", "")
-        if   ev == "register":      r = await self._register(ws, data)
-        elif ev == "lock_request":  r = await self._lock_request(data)
-        elif ev == "lock_release":  r = await self._lock_release(data)
-        elif ev == "file_change":   r = await self._file_change(data)
-        elif ev in {"create_task","claim_task","start_task","complete_task","abandon_task"}:
+        if ev == "register":
+            r = await self._register(ws, data)
+        elif ev == "lock_request":
+            r = await self._lock_request(data)
+        elif ev == "lock_release":
+            r = await self._lock_release(data)
+        elif ev == "file_change":
+            r = await self._file_change(data)
+        elif ev in {"create_task", "claim_task", "start_task", "complete_task", "abandon_task"}:
             data["event"] = ev.replace("_task", "")
             r = await self._task_event(data)
-        elif ev == "bid_task":      r = await self._bid(data)
+        elif ev == "bid_task":
+            r = await self._bid(data)
         elif ev == "heartbeat":
             m = data.get("model")
             ts_iso = datetime.now().isoformat()
             if m in self.agents:
                 self.agents[m].last_seen = ts_iso
                 self.storage.upsert_agent(m, {"status": self.agents[m].status, "last_seen": ts_iso})
-            
+
             tgt = data.get("target")
             if tgt and tgt in self.locks:
                 for l in self.locks[tgt]:
@@ -1024,12 +1118,17 @@ class DevMeshServer:
             r = {"event": "heartbeat_ack"}
         elif ev == "subscribe_file":
             fp = data.get("path")
-            if fp: self.file_subs.setdefault(fp, set()).add(data.get("model"))
+            if fp:
+                self.file_subs.setdefault(fp, set()).add(data.get("model"))
             r = {"event": "subscribe_ack", "path": fp}
         elif ev == "framework_ready":
             model = data.get("model")
             overview = data.get("overview", "")
-            project_dir = data.get("working_dir") or data.get("project_dir") or self.framework.get("project_dir")
+            project_dir = (
+                data.get("working_dir")
+                or data.get("project_dir")
+                or self.framework.get("project_dir")
+            )
             task_text = data.get("task_text") or self.framework.get("task_text")
 
             # Record framework and broadcast to all agents.
@@ -1042,25 +1141,31 @@ class DevMeshServer:
                 "timestamp": self._ts(),
             }
             self._audit({"event": "framework_ready", "model": model, "working_dir": project_dir})
-            await self._broadcast_agents({
-                "event": "framework_ready",
-                "model": model,
-                "working_dir": project_dir,
-                "overview": overview,
-                "task_text": task_text,
-            })
+            await self._broadcast_agents(
+                {
+                    "event": "framework_ready",
+                    "model": model,
+                    "working_dir": project_dir,
+                    "overview": overview,
+                    "task_text": task_text,
+                }
+            )
 
             # Now that framework is ready, broadcast the actual execution instruction.
             if task_text and project_dir:
-                await self._broadcast_agents({
-                    "event": "task_instruction",
-                    "text": task_text,
-                    "working_dir": project_dir,
-                    "framework_overview": overview,
-                    "from": "framework_gate",
-                    "timestamp": self._ts(),
-                })
-                self._audit({"event": "dashboard_task", "text": task_text, "working_dir": project_dir})
+                await self._broadcast_agents(
+                    {
+                        "event": "task_instruction",
+                        "text": task_text,
+                        "working_dir": project_dir,
+                        "framework_overview": overview,
+                        "from": "framework_gate",
+                        "timestamp": self._ts(),
+                    }
+                )
+                self._audit(
+                    {"event": "dashboard_task", "text": task_text, "working_dir": project_dir}
+                )
 
             asyncio.create_task(self._push_dash(self._full_state()))
             r = {"event": "framework_ack"}
@@ -1070,27 +1175,39 @@ class DevMeshServer:
             patch_text = data.get("patch", "")
             new_overview = data.get("overview", "")
             if self.framework.get("status") != "ready":
-                return await ws.send(orjson.dumps({"event": "framework_patch_denied", "reason": "not_ready"}))
+                return await ws.send(
+                    orjson.dumps({"event": "framework_patch_denied", "reason": "not_ready"})
+                )
 
             if new_overview:
                 self.framework["overview"] = new_overview
             if patch_text:
-                self.framework.setdefault("patches", []).append({
-                    "by": model,
-                    "patch": patch_text,
-                    "timestamp": self._ts(),
-                })
+                self.framework.setdefault("patches", []).append(
+                    {
+                        "by": model,
+                        "patch": patch_text,
+                        "timestamp": self._ts(),
+                    }
+                )
             self.framework["last_edited_by"] = model
             self.framework["last_edited_at"] = self._ts()
 
-            self._audit({"event": "framework_patched", "model": model, "working_dir": self.framework.get("project_dir")})
-            await self._broadcast_agents({
-                "event": "framework_patched",
-                "model": model,
-                "working_dir": self.framework.get("project_dir"),
-                "overview": self.framework.get("overview", ""),
-                "patch": patch_text,
-            })
+            self._audit(
+                {
+                    "event": "framework_patched",
+                    "model": model,
+                    "working_dir": self.framework.get("project_dir"),
+                }
+            )
+            await self._broadcast_agents(
+                {
+                    "event": "framework_patched",
+                    "model": model,
+                    "working_dir": self.framework.get("project_dir"),
+                    "overview": self.framework.get("overview", ""),
+                    "patch": patch_text,
+                }
+            )
             asyncio.create_task(self._push_dash(self._full_state()))
             r = {"event": "framework_patch_ack"}
         elif ev == "share_context":
@@ -1107,10 +1224,12 @@ class DevMeshServer:
             results = self.storage.search_context(q)
             r = {"event": "context_results", "query_id": query_id, "query": q, "results": results}
         elif ev == "get_status":
-            r = {"event": "status",
-                 "agents": {k: {"role": v.role, "status": v.status} for k, v in self.agents.items()},
-                 "tasks":  {k: self._serialize_task(v) for k, v in self.tasks.items()},
-                 "hardware": self.hw.status()}
+            r = {
+                "event": "status",
+                "agents": {k: {"role": v.role, "status": v.status} for k, v in self.agents.items()},
+                "tasks": {k: self._serialize_task(v) for k, v in self.tasks.items()},
+                "hardware": self.hw.status(),
+            }
         else:
             r = {"event": "error", "reason": f"unknown_event:{ev}"}
 
@@ -1131,9 +1250,11 @@ class DevMeshServer:
                 wd_path = Path(working_dir)
                 if not wd_path.exists():
                     log.warning(f"Working dir does not exist: {working_dir}")
-                    reply = {"sender": "system",
-                             "text": f"⚠ Working directory not found: {working_dir}. Using /tmp instead.",
-                             "timestamp": self._ts()}
+                    reply = {
+                        "sender": "system",
+                        "text": f"⚠ Working directory not found: {working_dir}. Using /tmp instead.",
+                        "timestamp": self._ts(),
+                    }
                     self.chat_log.append(reply)
                     await self._push_dash({"type": "chat_message", "data": reply})
                     working_dir = "/tmp"
@@ -1143,7 +1264,12 @@ class DevMeshServer:
 
             project_dir = self._select_or_create_project_folder(working_dir, text)
 
-            entry = {"sender": "user", "text": text, "working_dir": working_dir, "timestamp": self._ts()}
+            entry = {
+                "sender": "user",
+                "text": text,
+                "working_dir": working_dir,
+                "timestamp": self._ts(),
+            }
             self.chat_log.append(entry)
 
             self.framework = {
@@ -1155,44 +1281,55 @@ class DevMeshServer:
             }
             self._audit({"event": "framework_pending", "working_dir": project_dir, "text": text})
 
-            await self._broadcast_agents({
-                "event": "framework_pending",
-                "working_dir": project_dir,
-                "task_text": text,
-                "from": "dashboard",
-                "timestamp": entry["timestamp"],
-            })
+            await self._broadcast_agents(
+                {
+                    "event": "framework_pending",
+                    "working_dir": project_dir,
+                    "task_text": text,
+                    "from": "dashboard",
+                    "timestamp": entry["timestamp"],
+                }
+            )
 
             if self.architect:
-                await self._send_to_agent(self.architect, {
-                    "event": "framework_request",
-                    "task_text": text,
-                    "working_dir": project_dir,
-                    "timestamp": entry["timestamp"],
-                })
+                await self._send_to_agent(
+                    self.architect,
+                    {
+                        "event": "framework_request",
+                        "task_text": text,
+                        "working_dir": project_dir,
+                        "timestamp": entry["timestamp"],
+                    },
+                )
 
             await self._push_dash({"type": "chat_message", "data": entry})
-            
+
             # ✅ FIX 4: Check for agents and provide appropriate feedback
             if not self.agents:
                 # No agents connected — tell user clearly
-                reply = {"sender": "system",
-                         "text": f"⚠ No agents connected. Connect an agent first, then send the task.",
-                         "timestamp": self._ts()}
+                reply = {
+                    "sender": "system",
+                    "text": f"⚠ No agents connected. Connect an agent first, then send the task.",
+                    "timestamp": self._ts(),
+                }
             else:
                 n = len(self.agents)
-                reply = {"sender": "system",
-                         "text": f"Framework gate started for {n} agent{'s' if n!=1 else ''} in {project_dir}",
-                         "timestamp": self._ts()}
+                reply = {
+                    "sender": "system",
+                    "text": f"Framework gate started for {n} agent{'s' if n!=1 else ''} in {project_dir}",
+                    "timestamp": self._ts(),
+                }
                 # ✅ FIX 4: If no architect to build the framework, broadcast directly to all agents
                 if not self.architect:
-                    await self._broadcast_agents({
-                        "event": "task_instruction",
-                        "text": text,
-                        "working_dir": project_dir,
-                        "from": "dashboard_direct",
-                        "timestamp": entry["timestamp"],
-                    })
+                    await self._broadcast_agents(
+                        {
+                            "event": "task_instruction",
+                            "text": text,
+                            "working_dir": project_dir,
+                            "from": "dashboard_direct",
+                            "timestamp": entry["timestamp"],
+                        }
+                    )
             self.chat_log.append(reply)
             await self._push_dash({"type": "chat_message", "data": reply})
 
@@ -1245,28 +1382,32 @@ class DevMeshServer:
         if tool_name in self.launched_procs:
             proc = self.launched_procs[tool_name]
             if proc.poll() is None:
-                return {"ok": False, "error": f"{tool_name} bridge already running (pid {proc.pid})"}
+                return {
+                    "ok": False,
+                    "error": f"{tool_name} bridge already running (pid {proc.pid})",
+                }
 
         try:
             # Capture stderr to diagnose launch failures
-            stderr_file = tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=f'_{tool_name}.log')
+            stderr_file = tempfile.NamedTemporaryFile(
+                mode="w+", delete=False, suffix=f"_{tool_name}.log"
+            )
             stderr_path = stderr_file.name
             stderr_file.close()
-            
+
             proc = subprocess.Popen(
-                [sys.executable, str(bridge), "--tool", tool_name,
-                 "--ws", cfg.ws_url],
-                stdout=subprocess.DEVNULL, 
-                stderr=open(stderr_path, 'w'),
+                [sys.executable, str(bridge), "--tool", tool_name, "--ws", cfg.ws_url],
+                stdout=subprocess.DEVNULL,
+                stderr=open(stderr_path, "w"),
                 preexec_fn=None,
             )
             self.launched_procs[tool_name] = proc
-            
+
             # Store stderr path so we can check it later
-            if not hasattr(self, '_agent_stderr_paths'):
+            if not hasattr(self, "_agent_stderr_paths"):
                 self._agent_stderr_paths = {}
             self._agent_stderr_paths[tool_name] = stderr_path
-            
+
             msg = f"Launched {tool['label']} bridge (pid {proc.pid})"
             self._audit({"event": "agent_launched", "tool": tool_name, "pid": proc.pid})
             entry = {"sender": "system", "text": msg, "timestamp": self._ts()}
@@ -1282,7 +1423,7 @@ class DevMeshServer:
         proc = self.launched_procs.get(tool_name)
         if not proc:
             return {"ok": False, "error": "No bridge running for that tool"}
-        
+
         # ✅ FIX 3.1: SIGTERM with escalation to SIGKILL
         proc.terminate()
         try:
@@ -1290,7 +1431,7 @@ class DevMeshServer:
         except subprocess.TimeoutExpired:
             log.warning(f"Agent {tool_name} did not exit on SIGTERM, sending SIGKILL")
             proc.kill()
-        
+
         del self.launched_procs[tool_name]
         return {"ok": True, "msg": f"Stopped {tool_name} bridge"}
 
@@ -1337,34 +1478,34 @@ class DevMeshServer:
                 proc = self.launched_procs[tool_name]
                 if proc.poll() is not None:  # Process has exited
                     # Read stderr to see why it failed
-                    stderr_path = getattr(self, '_agent_stderr_paths', {}).get(tool_name)
+                    stderr_path = getattr(self, "_agent_stderr_paths", {}).get(tool_name)
                     error_msg = "Agent process terminated unexpectedly"
                     if stderr_path:
                         try:
-                            with open(stderr_path, 'r') as f:
+                            with open(stderr_path, "r") as f:
                                 stderr_content = f.read().strip()
                                 if stderr_content:
                                     # Find the most recent error line
-                                    lines = stderr_content.split('\n')
+                                    lines = stderr_content.split("\n")
                                     error_msg = lines[-1] if lines else error_msg
                             # Clean up temp file
                             Path(stderr_path).unlink(missing_ok=True)
                         except Exception:
                             pass
-                    
+
                     # Report to dashboard
                     entry = {
                         "sender": "system",
                         "text": f"⚠ {tool_name} bridge failed: {error_msg}",
-                        "timestamp": self._ts()
+                        "timestamp": self._ts(),
                     }
                     self.chat_log.append(entry)
                     await self._push_dash({"type": "chat_message", "data": entry})
                     log.error(f"Agent {tool_name} process crashed: {error_msg}")
-                    
+
                     # Clean up
                     del self.launched_procs[tool_name]
-                    if tool_name in getattr(self, '_agent_stderr_paths', {}):
+                    if tool_name in getattr(self, "_agent_stderr_paths", {}):
                         del self._agent_stderr_paths[tool_name]
 
     # ── Background: stale lock cleanup ────────────────────────────────────
@@ -1386,25 +1527,41 @@ class DevMeshServer:
                                 continue
                             expired.append(l)
                     except Exception:
-                        expired.append(l) # invalid timestamp format
+                        expired.append(l)  # invalid timestamp format
 
                 self.locks[target] = [l for l in locks if l not in expired]
                 if not self.locks[target]:
                     self.locks.pop(target, None)
-            
+
             for l in expired:
                 # Already filtered by grace window above; this lock is truly expired.
                 log.warning(f"Lock expired for {l.holder} on {l.target} (heartbeat timeout)")
                 for t in self.tasks.values():
-                    if t.owner_model == l.holder and t.status in {TaskState.WORKING, TaskState.PAUSED}:
+                    if t.owner_model == l.holder and t.status in {
+                        TaskState.WORKING,
+                        TaskState.PAUSED,
+                    }:
                         t.status = TaskState.ABANDONED
                         t.owner_model = None
-                        self.storage.upsert_task(t.task_id, {"status": t.status.value, "owner_model": None})
+                        self.storage.upsert_task(
+                            t.task_id, {"status": t.status.value, "owner_model": None}
+                        )
                         log.warning(f"Task {t.task_id} abandoned due to heartbeat timeout")
-                        self._audit({"event": "task_abandoned", "task_id": t.task_id,
-                                     "reason": "heartbeat_timeout"})
-                await self._broadcast_agents({"event": "lock_dropped", "model": l.holder,
-                                               "target": l.target, "reason": "heartbeat_timeout"})
+                        self._audit(
+                            {
+                                "event": "task_abandoned",
+                                "task_id": t.task_id,
+                                "reason": "heartbeat_timeout",
+                            }
+                        )
+                await self._broadcast_agents(
+                    {
+                        "event": "lock_dropped",
+                        "model": l.holder,
+                        "target": l.target,
+                        "reason": "heartbeat_timeout",
+                    }
+                )
                 self._audit({"event": "lock_dropped", "model": l.holder, "target": l.target})
             await asyncio.sleep(2)
 
@@ -1412,22 +1569,30 @@ class DevMeshServer:
         """Periodically sample hardware usage for dashboard heatmap."""
         while True:
             st = self.hw.status()
-            self.hw_history.append({
-                "ts": self._ts(),
-                "vram_used": st["vram"]["used"],
-                "vram_total": st["vram"]["total"],
-                "ram_used": st["ram"]["used"],
-                "ram_total": st["ram"]["total"],
-            })
+            self.hw_history.append(
+                {
+                    "ts": self._ts(),
+                    "vram_used": st["vram"]["used"],
+                    "vram_total": st["vram"]["total"],
+                    "ram_used": st["ram"]["used"],
+                    "ram_total": st["ram"]["total"],
+                }
+            )
             if len(self.hw_history) > cfg.hardware_history_len:
-                self.hw_history = self.hw_history[-cfg.hardware_history_len:]
-            
+                self.hw_history = self.hw_history[-cfg.hardware_history_len :]
+
             # Update Prometheus gauges
             vram_used.set(st["vram"]["used"])
             ram_used.set(st["ram"]["used"])
             active_agents.set(len(self.agents))
-            active_tasks.set(sum(1 for t in self.tasks.values() if t.status in (TaskState.CLAIMED, TaskState.WORKING)))
-            
+            active_tasks.set(
+                sum(
+                    1
+                    for t in self.tasks.values()
+                    if t.status in (TaskState.CLAIMED, TaskState.WORKING)
+                )
+            )
+
             # Keep dashboard data fresh even if no other events occur.
             if self.dash_clients:
                 await self._push_dash(self._full_state())
@@ -1451,9 +1616,15 @@ class DevMeshServer:
 
         # Pause any in-flight tasks for this agent (keep owner_model so the agent can resume).
         for t in self.tasks.values():
-            if t.owner_model == model and t.status in {TaskState.CLAIMED, TaskState.WORKING, TaskState.PAUSED}:
+            if t.owner_model == model and t.status in {
+                TaskState.CLAIMED,
+                TaskState.WORKING,
+                TaskState.PAUSED,
+            }:
                 t.status = TaskState.PAUSED
-                self.storage.upsert_task(t.task_id, {"status": t.status.value, "owner_model": model})
+                self.storage.upsert_task(
+                    t.task_id, {"status": t.status.value, "owner_model": model}
+                )
                 self._audit({"event": "task_paused", "task_id": t.task_id, "reason": reason})
 
         self._audit({"event": "agent_dropped", "model": model, "reason": reason})
@@ -1461,7 +1632,9 @@ class DevMeshServer:
         asyncio.create_task(self._push_dash(self._full_state()))
 
         # After grace expires, abandon tasks and release locks/hardware.
-        asyncio.create_task(self._expire_agent_disconnect(model=model, deadline=deadline, reason=reason))
+        asyncio.create_task(
+            self._expire_agent_disconnect(model=model, deadline=deadline, reason=reason)
+        )
 
     async def _expire_agent_disconnect(self, model: str, deadline: float, reason: str):
         await asyncio.sleep(max(0.0, deadline - time.time()))
@@ -1491,22 +1664,36 @@ class DevMeshServer:
 
         # Abandon paused/working tasks for this agent.
         for t in self.tasks.values():
-            if t.owner_model == model and t.status in {TaskState.CLAIMED, TaskState.WORKING, TaskState.PAUSED}:
+            if t.owner_model == model and t.status in {
+                TaskState.CLAIMED,
+                TaskState.WORKING,
+                TaskState.PAUSED,
+            }:
                 t.status = TaskState.ABANDONED
                 t.owner_model = None
                 self.storage.upsert_task(t.task_id, {"status": t.status.value, "owner_model": None})
-                self._audit({"event": "task_abandoned", "task_id": t.task_id, "reason": "reconnect_grace_timeout"})
+                self._audit(
+                    {
+                        "event": "task_abandoned",
+                        "task_id": t.task_id,
+                        "reason": "reconnect_grace_timeout",
+                    }
+                )
 
         # Mark agent as inactive in storage after grace expires.
         self.storage.upsert_agent(model, {"is_active": 0, "status": "disconnected"})
 
         for target in released_targets:
-            asyncio.create_task(self._broadcast_agents({
-                "event": "lock_dropped",
-                "model": model,
-                "target": target,
-                "reason": "reconnect_grace_timeout",
-            }))
+            asyncio.create_task(
+                self._broadcast_agents(
+                    {
+                        "event": "lock_dropped",
+                        "model": model,
+                        "target": target,
+                        "reason": "reconnect_grace_timeout",
+                    }
+                )
+            )
 
         asyncio.create_task(self._broadcast_roster())
         asyncio.create_task(self._push_dash(self._full_state()))
@@ -1524,16 +1711,17 @@ class DevMeshServer:
 
     async def run(self):
         agent_ws = websockets.serve(self.agent_handler, cfg.ws_host, cfg.ws_port)
-        dash_ws  = websockets.serve(self.dash_handler,  cfg.ws_host, cfg.dashboard_port)
-        
+        dash_ws = websockets.serve(self.dash_handler, cfg.ws_host, cfg.dashboard_port)
+
         dashboard_path = Path(__file__).parent / "dashboard.html"
         if not dashboard_path.exists():
             log.error(f"Dashboard HTML not found at {dashboard_path}")
             raise FileNotFoundError(f"Missing dashboard.html")
-        
+
         try:
-            http_server = ReusableHTTPServer((cfg.ws_host, cfg.http_port),
-                                            self._make_http_handler(dashboard_path))
+            http_server = ReusableHTTPServer(
+                (cfg.ws_host, cfg.http_port), self._make_http_handler(dashboard_path)
+            )
             self.http_server = http_server
             http_thread = Thread(target=http_server.serve_forever, daemon=True)
             http_thread.start()
@@ -1541,15 +1729,15 @@ class DevMeshServer:
         except OSError as e:
             log.error(f"Failed to start HTTP server on {cfg.ws_host}:{cfg.http_port}: {e}")
             raise
-        
+
         log.info(f"DevMesh Server Started")
         log.info(f"  Agent WebSocket:     {cfg.ws_url}")
         log.info(f"  Dashboard WebSocket: {cfg.dashboard_ws_url}")
         log.info(f"  HTTP Dashboard:      {cfg.http_url}")
-        
+
         if cfg.auto_open_browser:
             webbrowser.open(cfg.http_url)
-        
+
         async with agent_ws, dash_ws:
             cleanup_task = asyncio.create_task(self._cleanup())
             hw_task = asyncio.create_task(self._hardware_sampler())
@@ -1568,7 +1756,7 @@ class DevMeshServer:
                 if self.http_server:
                     with suppress(KeyboardInterrupt):
                         self.http_server.shutdown()
-    
+
     def _list_folders(self, path: str = "/home") -> List[Dict]:
         entries: List[Dict] = []
         try:
@@ -1577,22 +1765,31 @@ class DevMeshServer:
             if not p.exists() or not p.is_dir():
                 return []
             for item in p.iterdir():
-                if item.name.startswith('.'):
+                if item.name.startswith("."):
                     continue
                 try:
                     if item.is_dir():
                         count = None
                         try:
-                            count = sum(1 for c in item.iterdir() if not c.name.startswith('.'))
+                            count = sum(1 for c in item.iterdir() if not c.name.startswith("."))
                         except (PermissionError, OSError):
                             count = None
-                        entries.append({
-                            "name": item.name, "path": str(item), "type": "dir", "count": count,
-                        })
+                        entries.append(
+                            {
+                                "name": item.name,
+                                "path": str(item),
+                                "type": "dir",
+                                "count": count,
+                            }
+                        )
                     else:
-                        entries.append({
-                            "name": item.name, "path": str(item), "type": "file",
-                        })
+                        entries.append(
+                            {
+                                "name": item.name,
+                                "path": str(item),
+                                "type": "file",
+                            }
+                        )
                 except (PermissionError, OSError):
                     continue
         except (PermissionError, OSError):
@@ -1607,7 +1804,7 @@ class DevMeshServer:
             "connected_agents": len(self.agents),
             "recent_tasks": self.storage.get_recent_tasks(10),
         }
-    
+
     def _get_metrics(self) -> Dict:
         """Get metrics for /metrics endpoint."""
         # Count tasks by status
@@ -1616,16 +1813,16 @@ class DevMeshServer:
         for task in all_tasks:
             status = task.get("status", "unknown")
             tasks_by_status[status] = tasks_by_status.get(status, 0) + 1
-        
+
         # Count connected agents
         connected_count = len(self.agents)
-        
+
         # Count locks held
         locks_held = sum(len(locks) for locks in self.locks.values())
-        
+
         # Calculate uptime
         uptime_seconds = time.time() - self.start_time
-        
+
         return {
             "tasks_by_status": tasks_by_status,
             "connected_agents": connected_count,
@@ -1636,6 +1833,7 @@ class DevMeshServer:
     def _make_http_handler(self, dashboard_path: Path):
         server = self
         from urllib.parse import urlparse, parse_qs
+
         class DashboardHandler(BaseHTTPRequestHandler):
             def do_GET(handler):
                 if handler.path == "/":
@@ -1657,9 +1855,11 @@ class DevMeshServer:
                         handler.send_response(200)
                         handler.send_header("Content-type", "application/json")
                         handler.end_headers()
-                        handler.wfile.write(orjson.dumps({
-                            "default_working_dir": str(Path(__file__).parent.resolve())
-                        }))
+                        handler.wfile.write(
+                            orjson.dumps(
+                                {"default_working_dir": str(Path(__file__).parent.resolve())}
+                            )
+                        )
                     except Exception:
                         handler.send_response(500)
                         handler.end_headers()
@@ -1701,32 +1901,45 @@ class DevMeshServer:
                 else:
                     handler.send_response(404)
                     handler.end_headers()
+
             def log_message(handler, format, *args):
                 pass
+
         return DashboardHandler
+
 
 async def main():
     log.info("Starting DevMesh v3.0")
     server = DevMeshServer()
     await server.run()
 
+
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="DevMesh v3.0 — Local Multi-Agent Orchestration Server")
-    parser.add_argument("--port", "-p", type=int, default=None,
-                        help="Override HTTP port (default: 7701)")
-    parser.add_argument("--ws-port", type=int, default=None,
-                        help="Override WebSocket port (default: 7700)")
-    parser.add_argument("--no-browser", action="store_true",
-                        help="Skip auto-opening browser")
-    parser.add_argument("--log-level", type=str, default=None,
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-                        help="Set logging level")
+    parser = argparse.ArgumentParser(
+        description="DevMesh v3.0 — Local Multi-Agent Orchestration Server"
+    )
+    parser.add_argument(
+        "--port", "-p", type=int, default=None, help="Override HTTP port (default: 7701)"
+    )
+    parser.add_argument(
+        "--ws-port", type=int, default=None, help="Override WebSocket port (default: 7700)"
+    )
+    parser.add_argument("--no-browser", action="store_true", help="Skip auto-opening browser")
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default=None,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Set logging level",
+    )
     return parser.parse_args()
+
 
 def apply_cli_overrides(args):
     """Apply CLI argument overrides to environment variables."""
     import os
+
     if args.port:
         os.environ["DEVMESH_HTTP_PORT"] = str(args.port)
     if args.ws_port:
@@ -1736,15 +1949,17 @@ def apply_cli_overrides(args):
     if args.log_level:
         os.environ["DEVMESH_LOG_LEVEL"] = args.log_level
 
+
 if __name__ == "__main__":
     args = parse_args()
     apply_cli_overrides(args)
-    
+
     # Re-initialize config after applying overrides
     from config import get_server_config
+
     cfg = get_server_config()
     log = setup_logging(log_level=cfg.log_level, log_file=cfg.log_file)
-    
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

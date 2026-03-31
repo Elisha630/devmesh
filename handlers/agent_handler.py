@@ -62,9 +62,7 @@ class AgentWebSocketHandler:
             if result:
                 await ws.send(orjson.dumps(result))
         else:
-            await ws.send(
-                orjson.dumps({"event": "error", "reason": f"unknown_event:{ev}"})
-            )
+            await ws.send(orjson.dumps({"event": "error", "reason": f"unknown_event:{ev}"}))
 
     def _get_handler(self, event: str) -> Optional[Callable]:
         """Get the appropriate handler for an event type."""
@@ -148,10 +146,9 @@ class AgentWebSocketHandler:
 
         if model in self.server.agents:
             self.server.agents[model].last_seen = ts_iso
-            self.server.storage.upsert_agent(model, {
-                "status": self.server.agents[model].status,
-                "last_seen": ts_iso
-            })
+            self.server.storage.upsert_agent(
+                model, {"status": self.server.agents[model].status, "last_seen": ts_iso}
+            )
 
         # Update lock heartbeat
         tgt = data.get("target")
@@ -174,7 +171,11 @@ class AgentWebSocketHandler:
         """Handle framework ready notification."""
         model = data.get("model")
         overview = data.get("overview", "")
-        project_dir = data.get("working_dir") or data.get("project_dir") or self.server.framework.get("project_dir")
+        project_dir = (
+            data.get("working_dir")
+            or data.get("project_dir")
+            or self.server.framework.get("project_dir")
+        )
         task_text = data.get("task_text") or self.server.framework.get("task_text")
 
         # Record framework and broadcast
@@ -188,25 +189,31 @@ class AgentWebSocketHandler:
         }
 
         self.server._audit({"event": "framework_ready", "model": model, "working_dir": project_dir})
-        await self.server._broadcast_agents({
-            "event": "framework_ready",
-            "model": model,
-            "working_dir": project_dir,
-            "overview": overview,
-            "task_text": task_text,
-        })
+        await self.server._broadcast_agents(
+            {
+                "event": "framework_ready",
+                "model": model,
+                "working_dir": project_dir,
+                "overview": overview,
+                "task_text": task_text,
+            }
+        )
 
         # Broadcast task instruction
         if task_text and project_dir:
-            await self.server._broadcast_agents({
-                "event": "task_instruction",
-                "text": task_text,
-                "working_dir": project_dir,
-                "framework_overview": overview,
-                "from": "framework_gate",
-                "timestamp": self.server._ts(),
-            })
-            self.server._audit({"event": "dashboard_task", "text": task_text, "working_dir": project_dir})
+            await self.server._broadcast_agents(
+                {
+                    "event": "task_instruction",
+                    "text": task_text,
+                    "working_dir": project_dir,
+                    "framework_overview": overview,
+                    "from": "framework_gate",
+                    "timestamp": self.server._ts(),
+                }
+            )
+            self.server._audit(
+                {"event": "dashboard_task", "text": task_text, "working_dir": project_dir}
+            )
 
         asyncio.create_task(self.server._push_dash(self.server._full_state()))
         return {"event": "framework_ack"}
@@ -223,22 +230,32 @@ class AgentWebSocketHandler:
         if new_overview:
             self.server.framework["overview"] = new_overview
         if patch_text:
-            self.server.framework.setdefault("patches", []).append({
-                "by": model,
-                "patch": patch_text,
-                "timestamp": self.server._ts(),
-            })
+            self.server.framework.setdefault("patches", []).append(
+                {
+                    "by": model,
+                    "patch": patch_text,
+                    "timestamp": self.server._ts(),
+                }
+            )
         self.server.framework["last_edited_by"] = model
         self.server.framework["last_edited_at"] = self.server._ts()
 
-        self.server._audit({"event": "framework_patched", "model": model, "working_dir": self.server.framework.get("project_dir")})
-        await self.server._broadcast_agents({
-            "event": "framework_patched",
-            "model": model,
-            "working_dir": self.server.framework.get("project_dir"),
-            "overview": self.server.framework.get("overview", ""),
-            "patch": patch_text,
-        })
+        self.server._audit(
+            {
+                "event": "framework_patched",
+                "model": model,
+                "working_dir": self.server.framework.get("project_dir"),
+            }
+        )
+        await self.server._broadcast_agents(
+            {
+                "event": "framework_patched",
+                "model": model,
+                "working_dir": self.server.framework.get("project_dir"),
+                "overview": self.server.framework.get("overview", ""),
+                "patch": patch_text,
+            }
+        )
         asyncio.create_task(self.server._push_dash(self.server._full_state()))
         return {"event": "framework_patch_ack"}
 
@@ -256,15 +273,22 @@ class AgentWebSocketHandler:
         query = data.get("query", "")
         query_id = data.get("query_id")
         results = self.server.storage.search_context(query)
-        return {"event": "context_results", "query_id": query_id, "query": query, "results": results}
+        return {
+            "event": "context_results",
+            "query_id": query_id,
+            "query": query,
+            "results": results,
+        }
 
     async def _handle_get_status(self, ws, data: Dict) -> Dict:
         """Handle status request from agent."""
         return {
             "event": "status",
-            "agents": {k: {"role": v.role, "status": v.status} for k, v in self.server.agents.items()},
+            "agents": {
+                k: {"role": v.role, "status": v.status} for k, v in self.server.agents.items()
+            },
             "tasks": {k: self.server._serialize_task(v) for k, v in self.server.tasks.items()},
-            "hardware": self.server.hw.status()
+            "hardware": self.server.hw.status(),
         }
 
     async def _cleanup_connection(self, ws):
@@ -281,10 +305,7 @@ class AgentWebSocketHandler:
         if not self.clients:
             return
         msg = orjson.dumps(payload)
-        await asyncio.gather(
-            *[c.send(msg) for c in self.clients],
-            return_exceptions=True
-        )
+        await asyncio.gather(*[c.send(msg) for c in self.clients], return_exceptions=True)
 
     async def send_to_agent(self, model: str, payload: Dict) -> bool:
         """Send message to specific agent."""

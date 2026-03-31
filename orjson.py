@@ -37,4 +37,3 @@ def loads(data: bytes | str, *args: Any, **kwargs: Any) -> Any:
     if isinstance(data, (bytes, bytearray)):
         data = data.decode("utf-8")
     return json.loads(data)
-

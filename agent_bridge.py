@@ -27,14 +27,14 @@ from errors import ToolNotFound, ToolInvokeError
 
 class AgentBridge:
     def __init__(self, tool_name: str, ws_url: str):
-        self.tool_name  = tool_name
-        self.ws_url     = ws_url
-        self.profile    = TOOL_PROFILES.get(tool_name)
+        self.tool_name = tool_name
+        self.ws_url = ws_url
+        self.profile = TOOL_PROFILES.get(tool_name)
         if not self.profile:
             raise ToolNotFound(tool_name)
-        self.model_id   = tool_name
-        self.ws         = None
-        self.role       = None
+        self.model_id = tool_name
+        self.ws = None
+        self.role = None
         self.task_queue: asyncio.Queue = asyncio.Queue()
         self._task_counter = 0
         self._lock_wait = asyncio.Event()
@@ -51,7 +51,7 @@ class AgentBridge:
         self._pending_context_query_id = None
         self._context_results_event = asyncio.Event()
         self._context_results = []
-        
+
         # Phase 2: Session recovery
         self.session_id = self._load_session()
         self.log.debug(f"Initialized bridge for {tool_name} (Session: {self.session_id or 'New'})")
@@ -113,19 +113,26 @@ class AgentBridge:
                     working_dir = msg.get("working_dir", "/tmp")
                     target_file = msg.get("target_file")
                     self.log.info(f"Task received: {text[:80]}")
-                    await self.task_queue.put({
-                        "text": text,
-                        "working_dir": working_dir,
-                        "target_file": target_file,
-                        "ts": msg.get("timestamp", "")
-                    })
+                    await self.task_queue.put(
+                        {
+                            "text": text,
+                            "working_dir": working_dir,
+                            "target_file": target_file,
+                            "ts": msg.get("timestamp", ""),
+                        }
+                    )
 
                 elif ev == "task_created":
                     task = msg.get("task", {})
-                    self.log.info(f"Task created: {task.get('task_id')} — {task.get('description', '')[:60]}")
+                    self.log.info(
+                        f"Task created: {task.get('task_id')} — {task.get('description', '')[:60]}"
+                    )
 
                 elif ev == "lock_granted":
-                    if msg.get("model") == self.model_id and msg.get("target") == self._pending_lock_target:
+                    if (
+                        msg.get("model") == self.model_id
+                        and msg.get("target") == self._pending_lock_target
+                    ):
                         self._pending_lock_denied_reason = None
                         self._current_lock_target = self._pending_lock_target
                         self._lock_wait.set()
@@ -144,7 +151,9 @@ class AgentBridge:
                     if self._pending_context_query_id and qid == self._pending_context_query_id:
                         self._context_results = msg.get("results", [])
                         self._context_results_event.set()
-                        self.log.debug(f"Context query {qid} returned {len(self._context_results)} items")
+                        self.log.debug(
+                            f"Context query {qid} returned {len(self._context_results)} items"
+                        )
 
                 elif ev == "framework_pending":
                     self.framework_ready.clear()
@@ -167,13 +176,15 @@ class AgentBridge:
                         f"working_dir: {working_dir}\n"
                     )
                     overview = await self._invoke_tool(prompt, working_dir=working_dir)
-                    await self._send({
-                        "event": "framework_ready",
-                        "model": self.model_id,
-                        "task_text": task_text,
-                        "working_dir": working_dir,
-                        "overview": overview,
-                    })
+                    await self._send(
+                        {
+                            "event": "framework_ready",
+                            "model": self.model_id,
+                            "task_text": task_text,
+                            "working_dir": working_dir,
+                            "overview": overview,
+                        }
+                    )
 
         except Exception as e:
             self.log.error(f"Recv loop ended: {e}")
@@ -185,14 +196,14 @@ class AgentBridge:
             text = task["text"]
             working_dir = task.get("working_dir", "/tmp")
             target_file = task.get("target_file")
-            
+
             if not self.framework_ready.is_set():
                 try:
                     await asyncio.wait_for(self.framework_ready.wait(), timeout=600.0)
                 except asyncio.TimeoutError:
                     self.log.error("Framework not ready after 600s; abandoning queued task.")
                     continue
-            
+
             wd_path = Path(working_dir).expanduser()
             if not wd_path.exists() or not wd_path.is_dir():
                 self.log.warning(f"Working dir invalid: {working_dir}. Using /tmp.")
@@ -211,41 +222,53 @@ class AgentBridge:
                     target_file = None
 
             self._task_counter += 1
-            task_id   = f"T{self._task_counter:03d}-{self.tool_name}"
+            task_id = f"T{self._task_counter:03d}-{self.tool_name}"
             if not target_file:
-                out_file  = f"devmesh_output_{self.tool_name}_{self._task_counter}.md"
-                out_path  = wd_path / out_file
+                out_file = f"devmesh_output_{self.tool_name}_{self._task_counter}.md"
+                out_path = wd_path / out_file
 
             # Register task with server
-            await self._send({
-                "event": "create_task",
-                "model": self.model_id,
-                "task_id": task_id,
-                "description": text[:120],
-                "file": str(out_path),
-                "operation": "create",
-                "working_dir": str(wd_path),
-            })
+            await self._send(
+                {
+                    "event": "create_task",
+                    "model": self.model_id,
+                    "task_id": task_id,
+                    "description": text[:120],
+                    "file": str(out_path),
+                    "operation": "create",
+                    "working_dir": str(wd_path),
+                }
+            )
             await asyncio.sleep(0.1)
-            await self._send({"event": "claim_task",  "task_id": task_id, "model": self.model_id})
-            await self._send({"event": "start_task",  "task_id": task_id, "model": self.model_id})
+            await self._send({"event": "claim_task", "task_id": task_id, "model": self.model_id})
+            await self._send({"event": "start_task", "task_id": task_id, "model": self.model_id})
 
             # Acquire write lock
             self._pending_lock_target = str(out_path)
             self._pending_lock_denied_reason = None
             self._lock_wait.clear()
-            await self._send({"event": "lock_request", "model": self.model_id,
-                               "target": str(out_path), "type": "write"})
+            await self._send(
+                {
+                    "event": "lock_request",
+                    "model": self.model_id,
+                    "target": str(out_path),
+                    "type": "write",
+                }
+            )
             try:
                 await asyncio.wait_for(self._lock_wait.wait(), timeout=10.0)
             except asyncio.TimeoutError:
                 self.log.error(f"Lock timeout on {out_path}; abandoning task {task_id}")
-                await self._send({"event": "abandon_task", "task_id": task_id, "model": self.model_id})
+                await self._send(
+                    {"event": "abandon_task", "task_id": task_id, "model": self.model_id}
+                )
                 continue
 
             if self._pending_lock_denied_reason:
                 self.log.error(f"Lock denied on {out_path}: {self._pending_lock_denied_reason}")
-                await self._send({"event": "abandon_task", "task_id": task_id, "model": self.model_id})
+                await self._send(
+                    {"event": "abandon_task", "task_id": task_id, "model": self.model_id}
+                )
                 continue
 
             self.log.info(f"Running {self.profile['label']} on task…")
@@ -270,19 +293,23 @@ class AgentBridge:
             )
 
             # Report file change
-            await self._send({
-                "event":     "file_change",
-                "model":     self.model_id,
-                "path":      str(out_path),
-                "operation": "create",
-                "content":   output[:500],
-                "stdout":    raw_stdout[:20000],
-                "stderr":    raw_stderr[:20000],
-                "diff":      f"+++ {out_path}\n{output[:200]}",
-            })
+            await self._send(
+                {
+                    "event": "file_change",
+                    "model": self.model_id,
+                    "path": str(out_path),
+                    "operation": "create",
+                    "content": output[:500],
+                    "stdout": raw_stdout[:20000],
+                    "stderr": raw_stderr[:20000],
+                    "diff": f"+++ {out_path}\n{output[:200]}",
+                }
+            )
 
             # Release lock and complete task
-            await self._send({"event": "lock_release", "model": self.model_id, "target": str(out_path)})
+            await self._send(
+                {"event": "lock_release", "model": self.model_id, "target": str(out_path)}
+            )
             if self._current_lock_target == str(out_path):
                 self._current_lock_target = None
             await self._send({"event": "complete_task", "task_id": task_id, "model": self.model_id})
@@ -300,12 +327,14 @@ class AgentBridge:
         self._pending_context_query_id = qid
         self._context_results_event.clear()
         try:
-            await self._send({
-                "event": "query_context",
-                "model": self.model_id,
-                "query": query_text,
-                "query_id": qid,
-            })
+            await self._send(
+                {
+                    "event": "query_context",
+                    "model": self.model_id,
+                    "query": query_text,
+                    "query_id": qid,
+                }
+            )
             await asyncio.wait_for(self._context_results_event.wait(), timeout=timeout_sec)
             return self._context_results or fallback
         except asyncio.TimeoutError:
@@ -313,7 +342,9 @@ class AgentBridge:
         finally:
             self._pending_context_query_id = None
 
-    async def _invoke_tool(self, prompt: str, working_dir: str = "/tmp", context_items=None, return_raw: bool = False):
+    async def _invoke_tool(
+        self, prompt: str, working_dir: str = "/tmp", context_items=None, return_raw: bool = False
+    ):
         """Call the real CLI tool and return its output.
 
         If `return_raw` is True, return `(output, raw_stdout, raw_stderr)`.
@@ -336,10 +367,7 @@ class AgentBridge:
         wd_str = str(wd_path)
 
         def _subst(s: str) -> str:
-            return (
-                s.replace("{prompt}", prompt)
-                 .replace("{working_dir}", wd_str)
-            )
+            return s.replace("{prompt}", prompt).replace("{working_dir}", wd_str)
 
         mem_obj = self.memory or {}
         context_src = context_items if context_items is not None else (mem_obj.get("context") or [])
@@ -353,13 +381,15 @@ class AgentBridge:
             v = v[:1000] if isinstance(v, str) else ""
             if not k or not v:
                 continue
-            compact_context.append({
-                "key": k,
-                "value": v,
-                "source_agent": it.get("source_agent"),
-                "confidence_score": it.get("confidence_score"),
-                "timestamp": it.get("timestamp"),
-            })
+            compact_context.append(
+                {
+                    "key": k,
+                    "value": v,
+                    "source_agent": it.get("source_agent"),
+                    "confidence_score": it.get("confidence_score"),
+                    "timestamp": it.get("timestamp"),
+                }
+            )
 
         mem_compact = {
             "recent_tasks": (mem_obj.get("recent_tasks") or [])[-10:],
@@ -368,7 +398,7 @@ class AgentBridge:
         }
         mem = json.dumps(mem_compact, separators=(",", ":"), ensure_ascii=False)
         roster = json.dumps(self.roster or {}, separators=(",", ":"), ensure_ascii=False)
-        
+
         full_prompt = (
             "<devmesh_context>\n"
             f"tool: {self.tool_name}\n"
@@ -403,15 +433,21 @@ class AgentBridge:
             timeout_sec = cfg.cli_invoke_timeout_sec
             if mode == "stdin":
                 proc = await asyncio.create_subprocess_exec(
-                    *cmd, cwd=wd_str, stdin=asyncio.subprocess.PIPE,
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                    *cmd,
+                    cwd=wd_str,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
                 stdout, stderr = await asyncio.wait_for(
                     proc.communicate(input=full_prompt.encode()), timeout=timeout_sec
                 )
             else:
                 proc = await asyncio.create_subprocess_exec(
-                    *cmd, cwd=wd_str, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                    *cmd,
+                    cwd=wd_str,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
 
@@ -429,15 +465,17 @@ class AgentBridge:
 
         except asyncio.TimeoutError:
             try:
-                if 'proc' in locals() and proc.returncode is None:
+                if "proc" in locals() and proc.returncode is None:
                     proc.kill()
                     stdout, stderr = await proc.communicate()
                     out = (stdout or b"").decode(errors="replace").strip()
                     err = (stderr or b"").decode(errors="replace").strip()
                     msg = out or (f"(stderr) {err}" if err else "(no output)")
                     raise ToolInvokeError(self.tool_name, f"timeout; partial output:\n{msg[:2000]}")
-            except ToolInvokeError: raise
-            except Exception: pass
+            except ToolInvokeError:
+                raise
+            except Exception:
+                pass
             raise ToolInvokeError(self.tool_name, f"timeout (>{timeout_sec}s)")
         except FileNotFoundError:
             raise ToolInvokeError(self.tool_name, f"command not found: {cmd[0]}")
@@ -460,40 +498,43 @@ class AgentBridge:
         retry_delay = 1
         max_retries = 10
         retry_count = 0
-        
+
         while True:
             self.log.info(f"Connecting to DevMesh at {self.ws_url}…")
             try:
-                async with websockets.connect(self.ws_url, ping_interval=cfg.ping_interval_sec) as ws:
+                async with websockets.connect(
+                    self.ws_url, ping_interval=cfg.ping_interval_sec
+                ) as ws:
                     self.ws = ws
                     self.log.info("Connected ✓")
                     retry_delay = 1  # Reset on success
                     retry_count = 0  # Reset retry counter on success
 
                     # Register (including session_id if we have one)
-                    await self._send({
-                        "event":        "register",
-                        "model":        self.model_id,
-                        "session_id":   self.session_id,
-                        "version":      self.profile.get("label", self.tool_name),
-                        "capabilities": self.profile.get("capabilities", {}),
-                        "resources":    self.profile.get("resources", {}),
-                    })
+                    await self._send(
+                        {
+                            "event": "register",
+                            "model": self.model_id,
+                            "session_id": self.session_id,
+                            "version": self.profile.get("label", self.tool_name),
+                            "capabilities": self.profile.get("capabilities", {}),
+                            "resources": self.profile.get("resources", {}),
+                        }
+                    )
 
                     # ✅ FIX 3.5: Use wait() instead of gather() to handle WebSocket closure properly
                     recv_task = asyncio.create_task(self._recv_loop())
                     work_task = asyncio.create_task(self._work_loop())
                     beat_task = asyncio.create_task(self._heartbeat_loop())
-                    
+
                     done, pending = await asyncio.wait(
-                        [recv_task, work_task, beat_task],
-                        return_when=asyncio.FIRST_COMPLETED
+                        [recv_task, work_task, beat_task], return_when=asyncio.FIRST_COMPLETED
                     )
-                    
+
                     # If any critical task completes, cancel the rest
                     for task in pending:
                         task.cancel()
-                    
+
                     # Re-raise any exception from completed tasks
                     for task in done:
                         try:
@@ -507,8 +548,10 @@ class AgentBridge:
                 if retry_count > max_retries:
                     self.log.error(f"Max retries ({max_retries}) exceeded. Giving up.")
                     raise RuntimeError(f"Failed to connect after {max_retries} attempts") from e
-                
-                self.log.warning(f"Connection lost (attempt {retry_count}/{max_retries}). Retrying in {retry_delay}s...")
+
+                self.log.warning(
+                    f"Connection lost (attempt {retry_count}/{max_retries}). Retrying in {retry_delay}s..."
+                )
                 await asyncio.sleep(retry_delay)
                 # Exponential backoff: double the delay, cap at 60 seconds
                 retry_delay = min(retry_delay * 2, 60)
@@ -521,15 +564,21 @@ def main():
     parser = argparse.ArgumentParser(
         description="DevMesh Agent Bridge — connects an AI CLI to the DevMesh coordinator"
     )
-    parser.add_argument("--tool", required=True,
-                        choices=list(TOOL_PROFILES.keys()),
-                        help="Which tool to bridge (e.g. claude, gemini, codex)")
-    parser.add_argument("--ws",   default="ws://127.0.0.1:7700",
-                        help="DevMesh agent WebSocket URL (default: ws://127.0.0.1:7700)")
+    parser.add_argument(
+        "--tool",
+        required=True,
+        choices=list(TOOL_PROFILES.keys()),
+        help="Which tool to bridge (e.g. claude, gemini, codex)",
+    )
+    parser.add_argument(
+        "--ws",
+        default="ws://127.0.0.1:7700",
+        help="DevMesh agent WebSocket URL (default: ws://127.0.0.1:7700)",
+    )
     args = parser.parse_args()
 
     log = setup_logging(log_level="INFO")
-    
+
     log.info(f"DevMesh Agent Bridge")
     log.info(f"  Tool:   {TOOL_PROFILES[args.tool]['label']}")
     log.info(f"  Server: {args.ws}")

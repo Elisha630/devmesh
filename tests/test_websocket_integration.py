@@ -18,28 +18,33 @@ pytestmark = pytest.mark.asyncio
 @pytest.fixture
 def mock_server():
     """Mock server for testing."""
-    with patch('server.DevMeshServer') as MockServer:
+    with patch("server.DevMeshServer") as MockServer:
         server = MockServer()
         server.agents = {}
         server.tasks = {}
         server.locks = {}
         server.hw = MagicMock()
-        server.hw.status.return_value = {"vram": {"used": 0, "total": 16}, "ram": {"used": 0, "total": 32}}
+        server.hw.status.return_value = {
+            "vram": {"used": 0, "total": 16},
+            "ram": {"used": 0, "total": 32},
+        }
         server._ts.return_value = "2024-01-01T00:00:00"
         # Dashboard handler sends initial state on connection; provide a
         # deterministic, JSON-serializable default.
-        server._full_state = MagicMock(return_value={
-            "type": "state",
-            "agents": {},
-            "tasks": {},
-            "locks": {},
-            "hardware": server.hw.status.return_value,
-            "hardware_history": [],
-            "detected_tools": [],
-            "chat_log": [],
-            "event_log": [],
-            "memory": {"context": []},
-        })
+        server._full_state = MagicMock(
+            return_value={
+                "type": "state",
+                "agents": {},
+                "tasks": {},
+                "locks": {},
+                "hardware": server.hw.status.return_value,
+                "hardware_history": [],
+                "detected_tools": [],
+                "chat_log": [],
+                "event_log": [],
+                "memory": {"context": []},
+            }
+        )
         yield server
 
 
@@ -89,12 +94,14 @@ class TestAgentWebSocket:
         handler = AgentWebSocketHandler(mock_server)
 
         # Mock the server's _register method
-        mock_server._register = AsyncMock(return_value={
-            "event": "registered",
-            "model": "test-agent",
-            "role": "agent",
-            "session_id": "test-session-123"
-        })
+        mock_server._register = AsyncMock(
+            return_value={
+                "event": "registered",
+                "model": "test-agent",
+                "role": "agent",
+                "session_id": "test-session-123",
+            }
+        )
         mock_server.agents = {}
         mock_server._audit = MagicMock()
         mock_server._broadcast_roster = AsyncMock()
@@ -103,12 +110,16 @@ class TestAgentWebSocket:
         mock_server.agent_manager.agents = {}
 
         # Send registration message
-        await ws.messages.put(orjson.dumps({
-            "event": "register",
-            "model": "test-agent",
-            "version": "1.0",
-            "capabilities": {"languages": ["python"]}
-        }))
+        await ws.messages.put(
+            orjson.dumps(
+                {
+                    "event": "register",
+                    "model": "test-agent",
+                    "version": "1.0",
+                    "capabilities": {"languages": ["python"]},
+                }
+            )
+        )
 
         # Add close message to end the handler loop
         await ws.close()
@@ -123,10 +134,7 @@ class TestAgentWebSocket:
         assert len(ws.sent) > 0
         # Find the registration response
         responses = [orjson.loads(m) for m in ws.sent]
-        register_response = next(
-            (r for r in responses if r.get("event") == "registered"),
-            None
-        )
+        register_response = next((r for r in responses if r.get("event") == "registered"), None)
         assert register_response is not None or mock_server._register.called
 
     async def test_lock_request_flow(self, mock_server):
@@ -138,20 +146,22 @@ class TestAgentWebSocket:
         handler = AgentWebSocketHandler(mock_server)
 
         # Mock server methods
-        mock_server._lock_request = AsyncMock(return_value={
-            "event": "lock_granted",
-            "target": "/test/file.py",
-            "type": "write"
-        })
+        mock_server._lock_request = AsyncMock(
+            return_value={"event": "lock_granted", "target": "/test/file.py", "type": "write"}
+        )
         mock_server.agents = {"test-agent": MagicMock(websocket_id=1)}
 
         # Send lock request
-        await ws.messages.put(orjson.dumps({
-            "event": "lock_request",
-            "model": "test-agent",
-            "target": "/test/file.py",
-            "type": "write"
-        }))
+        await ws.messages.put(
+            orjson.dumps(
+                {
+                    "event": "lock_request",
+                    "model": "test-agent",
+                    "target": "/test/file.py",
+                    "type": "write",
+                }
+            )
+        )
         await ws.close()
 
         # Process
@@ -179,11 +189,9 @@ class TestAgentWebSocket:
         mock_server.locks = {}
 
         # Send heartbeat
-        await ws.messages.put(orjson.dumps({
-            "event": "heartbeat",
-            "model": "test-agent",
-            "target": "/test/file.py"
-        }))
+        await ws.messages.put(
+            orjson.dumps({"event": "heartbeat", "model": "test-agent", "target": "/test/file.py"})
+        )
         await ws.close()
 
         try:
@@ -193,10 +201,7 @@ class TestAgentWebSocket:
 
         # Verify heartbeat was processed
         responses = [orjson.loads(m) for m in ws.sent]
-        heartbeat_response = next(
-            (r for r in responses if r.get("event") == "heartbeat_ack"),
-            None
-        )
+        heartbeat_response = next((r for r in responses if r.get("event") == "heartbeat_ack"), None)
         assert heartbeat_response is not None or True  # May not be sent depending on mock
 
     async def test_invalid_json_handling(self, mock_server):
@@ -218,10 +223,7 @@ class TestAgentWebSocket:
 
         # Should receive error response
         responses = [orjson.loads(m) for m in ws.sent]
-        error_response = next(
-            (r for r in responses if r.get("event") == "error"),
-            None
-        )
+        error_response = next((r for r in responses if r.get("event") == "error"), None)
         assert error_response is not None
         assert "invalid_json" in error_response.get("reason", "")
 
@@ -237,12 +239,9 @@ class TestDashboardWebSocket:
         handler = DashboardWebSocketHandler(mock_server)
 
         # Mock full state
-        mock_server._full_state = MagicMock(return_value={
-            "type": "state",
-            "agents": {},
-            "tasks": {},
-            "locks": {}
-        })
+        mock_server._full_state = MagicMock(
+            return_value={"type": "state", "agents": {}, "tasks": {}, "locks": {}}
+        )
 
         # Close immediately after connection
         await ws.close()
@@ -273,11 +272,11 @@ class TestDashboardWebSocket:
         mock_server.log = MagicMock()
 
         # Send chat message
-        await ws.messages.put(orjson.dumps({
-            "type": "chat",
-            "text": "Create a Python function",
-            "working_dir": "/tmp"
-        }))
+        await ws.messages.put(
+            orjson.dumps(
+                {"type": "chat", "text": "Create a Python function", "working_dir": "/tmp"}
+            )
+        )
         await ws.close()
 
         try:
@@ -298,7 +297,7 @@ class TestDashboardWebSocket:
         mock_server.log = MagicMock()
 
         # Mock rate limiter to always exceed
-        with patch('rate_limit.get_rate_limiter') as mock_get_limiter:
+        with patch("rate_limit.get_rate_limiter") as mock_get_limiter:
             mock_limiter = MagicMock()
             mock_limiter.check = AsyncMock(
                 side_effect=RateLimitExceeded(retry_after=60, limit=10, window=60)
@@ -359,7 +358,7 @@ class TestWebSocketBroadcast:
         # Mock server agents
         mock_server.agents = {
             "agent-1": MagicMock(websocket_id=1),
-            "agent-2": MagicMock(websocket_id=2)
+            "agent-2": MagicMock(websocket_id=2),
         }
 
         # Send to specific agent
@@ -416,10 +415,7 @@ class TestErrorScenarios:
         handler = AgentWebSocketHandler(mock_server)
 
         # Send unknown event
-        await ws.messages.put(orjson.dumps({
-            "event": "unknown_event_xyz",
-            "data": "test"
-        }))
+        await ws.messages.put(orjson.dumps({"event": "unknown_event_xyz", "data": "test"}))
         await ws.close()
 
         try:
@@ -429,8 +425,5 @@ class TestErrorScenarios:
 
         # Should receive error response
         responses = [orjson.loads(m) for m in ws.sent]
-        error_response = next(
-            (r for r in responses if r.get("event") == "error"),
-            None
-        )
+        error_response = next((r for r in responses if r.get("event") == "error"), None)
         assert error_response is not None

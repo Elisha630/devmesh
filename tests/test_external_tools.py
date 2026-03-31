@@ -13,15 +13,12 @@ from pathlib import Path
 class TestToolDetection:
     """Tests for AI CLI tool detection."""
 
-    @patch('shutil.which')
-    @patch('subprocess.run')
+    @patch("shutil.which")
+    @patch("subprocess.run")
     def test_detect_installed_claude(self, mock_run, mock_which):
         """Detect Claude CLI tool."""
         mock_which.return_value = "/usr/bin/claude"
-        mock_run.return_value = MagicMock(
-            stdout="claude version 1.0.0\n",
-            stderr=""
-        )
+        mock_run.return_value = MagicMock(stdout="claude version 1.0.0\n", stderr="")
 
         from server import detect_installed_tools
 
@@ -32,7 +29,7 @@ class TestToolDetection:
         assert claude["status"] == "detected"
         assert claude["version"] == "claude version 1.0.0"
 
-    @patch('shutil.which')
+    @patch("shutil.which")
     def test_detect_missing_tool(self, mock_which):
         """Handle missing tool gracefully."""
         mock_which.return_value = None
@@ -44,8 +41,8 @@ class TestToolDetection:
 
         assert missing is None or missing.get("status") != "detected"
 
-    @patch('shutil.which')
-    @patch('subprocess.run')
+    @patch("shutil.which")
+    @patch("subprocess.run")
     def test_detect_tool_version_timeout(self, mock_run, mock_which):
         """Handle version check timeout."""
         mock_which.return_value = "/usr/bin/claude"
@@ -60,8 +57,8 @@ class TestToolDetection:
             assert claude["status"] == "detected"
             assert "timeout" in claude["version"] or claude["version"] == "installed"
 
-    @patch('shutil.which')
-    @patch('subprocess.run')
+    @patch("shutil.which")
+    @patch("subprocess.run")
     def test_detect_tool_subprocess_error(self, mock_run, mock_which):
         """Handle subprocess error during version check."""
         mock_which.return_value = "/usr/bin/claude"
@@ -83,8 +80,8 @@ class TestToolLaunching:
     @pytest.mark.asyncio
     async def test_launch_agent_with_mock_process(self):
         """Launch agent with mocked subprocess."""
-        with patch('subprocess.Popen') as mock_popen:
-            with patch('pathlib.Path.exists') as mock_exists:
+        with patch("subprocess.Popen") as mock_popen:
+            with patch("pathlib.Path.exists") as mock_exists:
                 mock_exists.return_value = True
                 mock_process = MagicMock()
                 mock_process.pid = 12345
@@ -101,15 +98,13 @@ class TestToolLaunching:
                 server_mock._push_dash = MagicMock()
 
                 # Mock config
-                with patch('config.cfg') as mock_cfg:
+                with patch("config.cfg") as mock_cfg:
                     mock_cfg.ws_url = "ws://localhost:7700"
 
                     from server import DevMeshServer
 
                     server = MagicMock(spec=DevMeshServer)
-                    server.detected_tools = [
-                        {"name": "claude", "label": "Claude", "cmd": "claude"}
-                    ]
+                    server.detected_tools = [{"name": "claude", "label": "Claude", "cmd": "claude"}]
                     server.launched_procs = {}
                     server._agent_stderr_paths = {}
                     server._audit = MagicMock()
@@ -182,15 +177,19 @@ class TestAgentBridge:
         """Agent bridge can be imported."""
         try:
             import agent_bridge
+
             assert True
         except ImportError:
             pytest.skip("agent_bridge.py not available")
 
     def test_bridge_cli_args_parsing(self):
         """Bridge parses command line arguments."""
-        with patch('sys.argv', ['agent_bridge.py', '--tool', 'claude', '--ws', 'ws://localhost:7700']):
+        with patch(
+            "sys.argv", ["agent_bridge.py", "--tool", "claude", "--ws", "ws://localhost:7700"]
+        ):
             try:
                 import agent_bridge
+
                 # Would need to test the main function
                 assert True
             except Exception:
@@ -276,7 +275,8 @@ class MockToolTest:
     def mock_tool_script(self, tmp_path):
         """Create a mock tool script for testing."""
         script = tmp_path / "mock_tool.py"
-        script.write_text("""
+        script.write_text(
+            """
 #!/usr/bin/env python3
 import sys
 import time
@@ -293,17 +293,15 @@ if "--help" in sys.argv:
 print("Processing...")
 time.sleep(0.1)
 print("Done")
-""")
+"""
+        )
         script.chmod(0o755)
         return script
 
     def test_mock_tool_execution(self, mock_tool_script):
         """Execute mock tool."""
         result = subprocess.run(
-            [str(mock_tool_script), "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5
+            [str(mock_tool_script), "--version"], capture_output=True, text=True, timeout=5
         )
 
         assert result.returncode == 0

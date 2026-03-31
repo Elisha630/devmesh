@@ -10,19 +10,24 @@ import sys
 import subprocess
 from pathlib import Path
 
+
 def print_header(text):
     print(f"\n{'='*60}")
     print(f"  {text}")
-    print('='*60)
+    print("=" * 60)
+
 
 def print_ok(text):
     print(f"  ✅ {text}")
 
+
 def print_warn(text):
     print(f"  ⚠️  {text}")
 
+
 def print_error(text):
     print(f"  ❌ {text}")
+
 
 def check_python_version():
     """Check Python version (3.10+ required)."""
@@ -33,6 +38,7 @@ def check_python_version():
     else:
         print_error(f"Python {version.major}.{version.minor} (need 3.10+)")
         return False
+
 
 def check_files_exist():
     """Check all created files exist."""
@@ -50,7 +56,7 @@ def check_files_exist():
         "IMPLEMENTATION_SUMMARY.md",
         "QUICK_START.md",
     ]
-    
+
     all_exist = True
     for file_name in required_files:
         file_path = base_dir / file_name
@@ -60,32 +66,33 @@ def check_files_exist():
         else:
             print_error(f"{file_name:40} MISSING")
             all_exist = False
-    
+
     return all_exist
+
 
 def check_dependencies():
     """Check if Python dependencies are installed."""
     required = {
-        'pydantic': 'pydantic>=2.0.0',
-        'yaml': 'pyyaml>=6.0',
-        'httpx': 'httpx>=0.24.0',
-        'watchfiles': 'watchfiles>=0.20.0',
-        'tomli': 'tomli>=2.0.1',
+        "pydantic": "pydantic>=2.0.0",
+        "yaml": "pyyaml>=6.0",
+        "httpx": "httpx>=0.24.0",
+        "watchfiles": "watchfiles>=0.20.0",
+        "tomli": "tomli>=2.0.1",
     }
-    
+
     missing = []
     installed = []
-    
+
     for import_name, package_name in required.items():
         try:
             __import__(import_name)
             installed.append(package_name)
         except ImportError:
             missing.append(package_name)
-    
+
     for pkg in installed:
         print_ok(f"{pkg:40} installed")
-    
+
     if missing:
         print()
         for pkg in missing:
@@ -94,13 +101,14 @@ def check_dependencies():
         print("  Install missing dependencies with:")
         print(f"    pip install {' '.join(missing)}")
         return False
-    
+
     return True
+
 
 def check_file_contents():
     """Quick sanity check on file contents."""
     base_dir = Path(__file__).parent
-    
+
     checks = [
         ("error_handler.py", "StructuredErrorHandler"),
         ("config_manager.py", "ConfigManager"),
@@ -111,7 +119,7 @@ def check_file_contents():
         ("services/file_watcher.py", "class FileWatcher"),
         ("services/ws_health.py", "class HealthMonitor"),
     ]
-    
+
     all_valid = True
     for file_name, search_text in checks:
         file_path = base_dir / file_name
@@ -119,7 +127,7 @@ def check_file_contents():
             print_error(f"{file_name:40} file not found")
             all_valid = False
             continue
-        
+
         try:
             content = file_path.read_text()
             if search_text in content:
@@ -129,20 +137,21 @@ def check_file_contents():
         except Exception as e:
             print_error(f"{file_name:40} - {str(e)}")
             all_valid = False
-    
+
     return all_valid
+
 
 def check_project_structure():
     """Check that project structure is intact."""
     base_dir = Path(__file__).parent
-    
+
     dirs = [
         "services",
         "handlers",
         "tests",
         "docs",
     ]
-    
+
     all_exist = True
     for dir_name in dirs:
         dir_path = base_dir / dir_name
@@ -151,13 +160,14 @@ def check_project_structure():
         else:
             print_error(f"{dir_name:40} NOT FOUND")
             all_exist = False
-    
+
     return all_exist
+
 
 def print_integration_guide():
     """Print quick integration guide."""
     print_header("Integration Guide (see QUICK_START.md for details)")
-    
+
     steps = [
         "1. Install dependencies: pip install -r requirements.txt",
         "2. Add error_handler to server.py __init__()",
@@ -168,36 +178,37 @@ def print_integration_guide():
         "7. Add dashboard UI enhancements to dashboard.html",
         "8. Test all features",
     ]
-    
+
     for step in steps:
         print(f"  {step}")
+
 
 def main():
     """Run all checks."""
     print_header("DevMesh Fixes Verification")
-    
+
     all_checks_pass = True
-    
+
     print_header("1. Python Version")
     if not check_python_version():
         all_checks_pass = False
-    
+
     print_header("2. Project Structure")
     if not check_project_structure():
         all_checks_pass = False
-    
+
     print_header("3. Created Files")
     if not check_files_exist():
         all_checks_pass = False
-    
+
     print_header("4. File Contents (Quick Check)")
     if not check_file_contents():
         all_checks_pass = False
-    
+
     print_header("5. Python Dependencies")
     if not check_dependencies():
         all_checks_pass = False
-    
+
     print()
     if all_checks_pass:
         print_header("✅ All Checks Passed!")
@@ -212,6 +223,7 @@ def main():
         print("  Please fix the issues above and run again.")
         print()
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

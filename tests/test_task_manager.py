@@ -17,10 +17,7 @@ class TestTaskCreation:
         tm = TaskManager()
 
         task = tm.create_task(
-            task_id="task-1",
-            description="Test task",
-            file="test.py",
-            operation="create"
+            task_id="task-1", description="Test task", file="test.py", operation="create"
         )
 
         assert task is not None
@@ -41,11 +38,7 @@ class TestTaskCreation:
         """Create task with priority."""
         tm = TaskManager()
 
-        task = tm.create_task(
-            task_id="task-1",
-            description="High priority",
-            priority=5
-        )
+        task = tm.create_task(task_id="task-1", description="High priority", priority=5)
 
         assert task.priority == 5
 
@@ -279,12 +272,7 @@ class TestTaskQueries:
         """Convert task to dictionary."""
         tm = TaskManager()
 
-        task = tm.create_task(
-            task_id="task-1",
-            description="Test task",
-            file="test.py",
-            priority=3
-        )
+        task = tm.create_task(task_id="task-1", description="Test task", file="test.py", priority=3)
 
         serialized = tm.serialize_task(task)
 
@@ -363,11 +351,7 @@ class TestTaskEdgeCases:
         """Task with non-existent dependency."""
         tm = TaskManager()
 
-        task = tm.create_task(
-            task_id="task-1",
-            description="Test",
-            depends_on=["nonexistent"]
-        )
+        task = tm.create_task(task_id="task-1", description="Test", depends_on=["nonexistent"])
 
         assert tm.check_dependencies_ready(task) is False
 

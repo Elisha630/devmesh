@@ -112,7 +112,7 @@ class TestHardwareThrottle:
 
         assert result is True
         assert hw.used_vram == 6.0  # Not 4 + 6 = 10
-        assert hw.used_ram == 10.0   # Not 8 + 10 = 18
+        assert hw.used_ram == 10.0  # Not 8 + 10 = 18
 
     def test_can_allocate(self):
         """Check if resources can be allocated without actually allocating."""
