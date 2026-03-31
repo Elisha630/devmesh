@@ -10,7 +10,7 @@ when accessed from multiple threads (HTTP server, async event loop, etc.).
 """
 
 import sqlite3
-import json
+import orjson
 import logging
 import threading
 from pathlib import Path
@@ -77,15 +77,25 @@ class _ConnectionPool:
 
 
 class StorageManager:
-    def __init__(self, db_path: Path, audit_log_path: Optional[Path] = None):
+    def __init__(
+        self,
+        db_path: Path,
+        audit_log_path: Optional[Path] = None,
+        *,
+        async_writes: bool = False,
+    ):
         self.db_path = db_path
         self.audit_log_path = audit_log_path
+        self._async_writes = async_writes
         self._pool = _ConnectionPool(db_path)
-        self._write_queue: queue.Queue = queue.Queue()
+        self._write_queue: Optional[queue.Queue] = None
         self._writer_thread: Optional[threading.Thread] = None
-        self._stop_writer = threading.Event()
-        self._batch_interval = 0.1  # Batch writes every 100ms
-        self._start_writer_thread()
+        self._stop_writer: Optional[threading.Event] = None
+        self._batch_interval = 0.1  # Batch writes every 100ms (async mode only)
+        if async_writes:
+            self._write_queue = queue.Queue()
+            self._stop_writer = threading.Event()
+            self._start_writer_thread()
         self._init_db()
         if self.audit_log_path:
             try:
@@ -103,6 +113,8 @@ class StorageManager:
         pending = []
         last_flush = time.time()
         
+        assert self._stop_writer is not None
+        assert self._write_queue is not None
         while not self._stop_writer.is_set():
             try:
                 # Non-blocking get with timeout
@@ -139,7 +151,19 @@ class StorageManager:
             conn.commit()
     
     def _queue_write(self, operation):
-        """Queue a write operation for batch processing."""
+        """
+        Write operation dispatcher.
+
+        In sync mode (unit tests), we execute immediately so reads right after
+        writes observe the latest data.
+        """
+        if not self._async_writes:
+            with self._get_conn() as conn:
+                operation(conn)
+                conn.commit()
+            return
+
+        assert self._write_queue is not None
         self._write_queue.put(operation)
     
     @contextmanager
@@ -238,13 +262,15 @@ class StorageManager:
 
     def close(self):
         """Close the storage manager and release all resources."""
-        # Signal writer thread to stop
-        self._stop_writer.set()
-        self._write_queue.put(None)  # Sentinel to unblock the writer
-        
-        # Wait for writer thread to finish
-        if self._writer_thread and self._writer_thread.is_alive():
-            self._writer_thread.join(timeout=2.0)
+        if self._async_writes:
+            assert self._stop_writer is not None
+            assert self._write_queue is not None
+            # Signal writer thread to stop
+            self._stop_writer.set()
+            self._write_queue.put(None)  # Sentinel to unblock the writer
+            # Wait for writer thread to finish
+            if self._writer_thread and self._writer_thread.is_alive():
+                self._writer_thread.join(timeout=2.0)
         
         # Close all pooled connections
         self._pool.close_all()
@@ -272,7 +298,7 @@ class StorageManager:
                 final_data.get("is_active", 1),
                 final_data.get("connected_at", existing["connected_at"] if existing else datetime.now().isoformat()),
                 datetime.now().isoformat(),
-                json.dumps(final_data.get("hardware_usage", {}))
+                orjson.dumps(final_data.get("hardware_usage", {})).decode('utf-8')
             ))
         
         self._queue_write(_do_upsert)
@@ -285,7 +311,7 @@ class StorageManager:
             if row:
                 d = dict(row)
                 if d.get("hardware_usage"):
-                    d["hardware_usage"] = json.loads(d["hardware_usage"])
+                    d["hardware_usage"] = orjson.loads(d["hardware_usage"])
                 return d
             return None
 
@@ -297,7 +323,7 @@ class StorageManager:
             for row in cur.fetchall():
                 d = dict(row)
                 if d.get("hardware_usage"):
-                    d["hardware_usage"] = json.loads(d["hardware_usage"])
+                    d["hardware_usage"] = orjson.loads(d["hardware_usage"])
                 agents.append(d)
             return agents
 
@@ -326,7 +352,7 @@ class StorageManager:
                 final_data.get("created_at", existing["created_at"] if existing else datetime.now().isoformat()),
                 final_data.get("completed_at"),
                 final_data.get("result_summary"),
-                json.dumps(final_data.get("details", {}))
+                orjson.dumps(final_data.get("details", {})).decode('utf-8')
             ))
         
         self._queue_write(_do_upsert)
@@ -339,7 +365,7 @@ class StorageManager:
             if row:
                 d = dict(row)
                 if d.get("details"):
-                    d["details"] = json.loads(d["details"])
+                    d["details"] = orjson.loads(d["details"])
                 return d
             return None
 
@@ -351,7 +377,7 @@ class StorageManager:
             for row in cur.fetchall():
                 d = dict(row)
                 if d.get("details"):
-                    d["details"] = json.loads(d["details"])
+                    d["details"] = orjson.loads(d["details"])
                 tasks.append(d)
             return tasks
 
@@ -404,12 +430,12 @@ class StorageManager:
                 ts,
                 event_type,
                 model_id,
-                json.dumps(details)
+                orjson.dumps(details).decode('utf-8')
             ))
             if self.audit_log_path:
                 try:
                     with self.audit_log_path.open("a", encoding="utf-8") as f:
-                        f.write(json.dumps({
+                        f.write(orjson.dumps({
                             "timestamp": ts,
                             "event_type": event_type,
                             "model_id": model_id,
@@ -428,7 +454,7 @@ class StorageManager:
             for row in cur.fetchall():
                 d = dict(row)
                 if d.get("details"):
-                    d["details"] = json.loads(d["details"])
+                    d["details"] = orjson.loads(d["details"])
                 events.append(d)
             return events
 

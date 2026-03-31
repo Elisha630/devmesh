@@ -1,0 +1,206 @@
+# DevMesh Project Configuration
+# =============================
+# Project metadata and tool configurations
+
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "devmesh"
+version = "3.1.0"
+description = "Local multi-agent orchestration framework for AI CLI tools"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "DevMesh Contributors"}
+]
+keywords = ["ai", "agents", "orchestration", "cli", "websocket"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Distributed Computing",
+]
+dependencies = [
+    "websockets>=11.0.0",
+    "python-dotenv>=1.0.0",
+    "orjson>=3.9.0",
+    "prometheus-client>=0.19.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0",
+    "httpx>=0.24.0",
+    "watchfiles>=0.20.0",
+    "tomli>=2.0.1; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.23.0",
+    "black>=24.0.0",
+    "ruff>=0.3.0",
+    "mypy>=1.9.0",
+    "bandit>=1.7.7",
+    "pre-commit>=3.6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/devmesh"
+Documentation = "https://github.com/yourusername/devmesh#readme"
+Repository = "https://github.com/yourusername/devmesh"
+Issues = "https://github.com/yourusername/devmesh/issues"
+
+[project.scripts]
+devmesh = "server:main"
+devmesh-agent = "agent_bridge:main"
+
+# Black Configuration
+[tool.black]
+line-length = 100
+target-version = ['py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+# Ruff Configuration
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+select = [
+    "E",   # pycodestyle errors
+    "F",   # Pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "S",   # flake8-bandit (security)
+]
+ignore = [
+    "S101",  # Use of assert detected (allowed in tests)
+    "S311",  # Pseudo-random generators (not for crypto)
+]
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["S101", "S311"]
+
+[tool.ruff.mccabe]
+max-complexity = 15
+
+# MyPy Configuration
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+# Bandit Configuration
+[tool.bandit]
+skips = ["B101"]  # Skip assert used checks in tests
+exclude_dirs = ["tests"]
+
+# Pytest Configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Slow tests",
+    "asyncio: Async tests",
+]
+
+# Coverage Configuration
+[tool.coverage.run]
+source = ["."]
+branch = true
+omit = [
+    "tests/*",
+    "venv/*",
+    ".venv/*",
+    "__pycache__/*",
+    # Unit tests focus on core business logic; exclude runtime entrypoints
+    # and UI/WS surfaces that require heavy integration setup.
+    "server.py",
+    "agent_bridge.py",
+    "client_mock.py",
+    "check_tools.py",
+    "handlers/*",
+    "middleware.py",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+fail_under = 80
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+# Commitizen Configuration
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "3.1.0"
+tag_format = "v$version"
+version_files = [
+    "pyproject.toml:version",
+]
+style = [
+    ["qmark", "fg:#ff9d00 bold"],
+    ["question", "bold"],
+    ["answer", "fg:#ff9d00 bold"],
+    ["pointer", "fg:#ff9d00 bold"],
+    ["highlighted", "fg:#ff9d00 bold"],
+    ["selected", "fg:#cc5454"],
+    ["separator", "fg:#cc5454"],
+    ["instruction", ""],
+    ["text", ""],
+    ["disabled", "fg:#858585 italic"]
+]

@@ -259,3 +259,10 @@ def get_agent_config(tool_name: str, ws_url: Optional[str] = None) -> AgentConfi
     if ws_url:
         cfg.ws_url = ws_url
     return cfg
+
+
+# Some unit tests patch `config.cfg` to control runtime configuration.
+# Keep a module-level placeholder for compatibility.
+# IMPORTANT: Do not instantiate `ServerConfig()` at import time, because unit
+# tests intentionally mutate env vars and re-import this module.
+cfg: Optional[ServerConfig] = None

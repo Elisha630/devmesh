@@ -1,0 +1,91 @@
+# DevMesh Docker Compose Configuration
+# ====================================
+# Run: docker-compose up -d
+# Stop: docker-compose down
+
+version: '3.8'
+
+services:
+  devmesh-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: devmesh-server
+    restart: unless-stopped
+    ports:
+      - "7700:7700"  # Agent WebSocket
+      - "7701:7701"  # HTTP Dashboard
+      - "7702:7702"  # Dashboard WebSocket
+    volumes:
+      - devmesh-data:/app/.devmesh
+      - devmesh-logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Optional: for tool detection
+    environment:
+      - DEVMESH_LOG_LEVEL=INFO
+      - DEVMESH_WS_HOST=0.0.0.0
+      - DEVMESH_GPU_VRAM_GB=16
+      - DEVMESH_RAM_GB=32
+      - DEVMESH_LOCK_TTL_SEC=15
+      - DEVMESH_HEARTBEAT_GRACE_SEC=5
+    networks:
+      - devmesh-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('127.0.0.1',7701)); s.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Prometheus metrics scraper
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: devmesh-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - devmesh-network
+    profiles:
+      - monitoring
+
+  # Optional: Grafana dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: devmesh-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=devmesh-admin
+    networks:
+      - devmesh-network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+
+volumes:
+  devmesh-data:
+  devmesh-logs:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  devmesh-network:
+    driver: bridge

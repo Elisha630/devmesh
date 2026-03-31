@@ -1,7 +1,9 @@
-```
 # Compiled Python files
 *.pyc
 __pycache__/
+*.pyo
+*.pyd
+*.so
 
 # Virtual environments
 venv/
@@ -12,32 +14,63 @@ venv/
 
 # Logs
 *.log
+logs/
 
 # Temporary files
 *.tmp
 *.swp
+*.swo
+*~
 
 # Coverage reports
 .coverage
 coverage/
 htmlcov/
+.coverage.*
 
 # IDE files
 .vscode/
 .idea/
+*.sublime-project
+*.sublime-workspace
 
 # Build artifacts
 dist/
 build/
 target/
 *.egg-info/
+.eggs/
 
 # Dependencies cache
 .mypy_cache/
 .pytest_cache/
+.ruff_cache/
 node_modules/
 
 # System files
 .DS_Store
 Thumbs.db
-```.worktrees/
+
+# DevMesh specific
+.devmesh/*.bak
+.devmesh/*.db-shm
+.devmesh/*.db-wal
+
+# Security scanning
+bandit-report.json
+
+# Docker
+.dockerignore
+
+# Documentation build
+docs/_build/
+
+# Worktrees
+*.worktrees/
+
+# Local development files
+local/
+*.local
+
+# Type stubs
+*.pyi

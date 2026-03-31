@@ -1,0 +1,246 @@
+openapi: 3.0.3
+info:
+  title: DevMesh API
+  description: |
+    DevMesh Multi-Agent Orchestration API
+
+    DevMesh coordinates multiple AI agent CLI tools (Claude Code, Cursor, Gemini, etc.)
+    to work together on software development tasks. This API provides endpoints for
+    health checks, metrics, and file system operations.
+
+    WebSocket endpoints:
+    - **Agent WebSocket**: `ws://localhost:7700` - AI agents connect here
+    - **Dashboard WebSocket**: `ws://localhost:7702` - Browser dashboard connects here
+  version: 3.1.0
+  contact:
+    name: DevMesh Contributors
+    url: https://github.com/yourusername/devmesh
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:7701
+    description: Local development server
+
+paths:
+  /:
+    get:
+      summary: Dashboard HTML
+      description: Returns the main dashboard HTML page
+      responses:
+        '200':
+          description: Dashboard HTML content
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /health:
+    get:
+      summary: Health Check
+      description: Returns the health status of all DevMesh services
+      operationId: getHealth
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /metrics:
+    get:
+      summary: Prometheus Metrics
+      description: Returns Prometheus-formatted metrics for monitoring
+      operationId: getMetrics
+      tags:
+        - Monitoring
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # HELP devmesh_tasks_total Total tasks processed
+                # TYPE devmesh_tasks_total counter
+                devmesh_tasks_total{status="completed"} 42
+
+  /api/default_workdir:
+    get:
+      summary: Get Default Working Directory
+      description: Returns the default working directory path
+      operationId: getDefaultWorkdir
+      tags:
+        - Filesystem
+      responses:
+        '200':
+          description: Default working directory
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  default_working_dir:
+                    type: string
+                    example: /home/user/devmesh
+
+  /api/folders:
+    get:
+      summary: List Folders
+      description: List folders and files in a directory
+      operationId: listFolders
+      tags:
+        - Filesystem
+      parameters:
+        - name: path
+          in: query
+          description: Path to list
+          required: false
+          schema:
+            type: string
+            default: /home
+      responses:
+        '200':
+          description: Directory contents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DirectoryEntry'
+                  path:
+                    type: string
+        '500':
+          description: Error accessing directory
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          example: healthy
+        timestamp:
+          type: string
+          format: date-time
+        agents:
+          type: integer
+          description: Number of connected agents
+        tasks:
+          type: integer
+          description: Number of tasks
+        checks:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/HealthCheck'
+
+    HealthCheck:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        message:
+          type: string
+        latency_ms:
+          type: number
+          format: float
+
+    DirectoryEntry:
+      type: object
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        type:
+          type: string
+          enum: [dir, file]
+        count:
+          type: integer
+          nullable: true
+          description: Number of children (for directories)
+
+    Agent:
+      type: object
+      properties:
+        model_id:
+          type: string
+        role:
+          type: string
+          enum: [architect, agent]
+        status:
+          type: string
+          enum: [idle, working, reading, writing, disconnected, suspended]
+        current_task:
+          type: string
+          nullable: true
+        connected_at:
+          type: string
+          format: date-time
+
+    Task:
+      type: object
+      properties:
+        task_id:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [queued, claimed, working, paused, completed, failed, abandoned]
+        owner_model:
+          type: string
+          nullable: true
+        priority:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        depends_on:
+          type: array
+          items:
+            type: string
+
+    Lock:
+      type: object
+      properties:
+        target:
+          type: string
+        type:
+          type: string
+          enum: [read, write, intent, co_write]
+        holder:
+          type: string
+
+  # WebSocket message schemas (documented for reference)
+  # Actual WebSocket communication uses these message formats
+
+webhooks:
+  # DevMesh supports webhook notifications on task completion
+  # Configure webhook URLs via environment variables
+
+# Security schemes
+security:
+  - bearerAuth: []
+
+# Custom extensions
+x-websocket-endpoints:
+  agent:
+    url: ws://localhost:7700
+    description: Agent WebSocket endpoint
+    protocol: agent-protocol-v3
+  dashboard:
+    url: ws://localhost:7702
+    description: Dashboard WebSocket endpoint
+    protocol: dashboard-protocol-v3
