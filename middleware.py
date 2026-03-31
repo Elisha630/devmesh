@@ -53,11 +53,11 @@ class SecurityHeadersMiddleware:
         "X-XSS-Protection": "1; mode=block",
         # Referrer policy
         "Referrer-Policy": "strict-origin-when-cross-origin",
-        # Content Security Policy
+        # Content Security Policy - removed unsafe-inline for better security
         "Content-Security-Policy": (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "script-src 'self'; "
+            "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; "
             "font-src 'self' https://fonts.gstatic.com; "
             "connect-src 'self' ws://localhost:* ws://127.0.0.1:*; "
             "img-src 'self' data:; "

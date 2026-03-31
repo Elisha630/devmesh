@@ -185,8 +185,17 @@ def is_safe_path(path: str | Path, allowed_extensions: Optional[set] = None) -> 
     except SecurityError:
         return False
 
+    # Resolve symlinks and verify the real path
+    try:
+        real_path = sanitized.resolve(strict=True)
+        # Check if the resolved path still exists and is accessible
+        if not real_path.exists():
+            return False
+    except (OSError, ValueError):
+        return False
+
     if allowed_extensions:
-        ext = sanitized.suffix.lower()
+        ext = real_path.suffix.lower()
         if ext not in allowed_extensions:
             return False
 

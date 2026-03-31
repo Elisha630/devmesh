@@ -44,14 +44,27 @@ class TokenBucket:
     refill_rate: float = 1.0  # tokens per second
     _tokens: float = field(default=0.0, init=False)
     _last_refill: float = field(default_factory=time.time, init=False)
-    _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
+    _lock: Optional[asyncio.Lock] = field(default=None, init=False, repr=False)
 
     def __post_init__(self):
         self._tokens = float(self.capacity)
+        # Initialize lock in __post_init__ to ensure it's created in the event loop context
+        try:
+            loop = asyncio.get_running_loop()
+            self._lock = asyncio.Lock()
+        except RuntimeError:
+            # No running loop, will be created on first use
+            pass
+
+    def _get_lock(self) -> asyncio.Lock:
+        """Get or create the lock in the current event loop context."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     async def acquire(self, tokens: float = 1.0) -> bool:
         """Try to acquire tokens. Returns True if successful."""
-        async with self._lock:
+        async with self._get_lock():
             now = time.time()
             elapsed = now - self._last_refill
             self._tokens = min(self.capacity, self._tokens + elapsed * self.refill_rate)
@@ -78,14 +91,29 @@ class SlidingWindow:
     max_requests: int = 10
     window_seconds: float = 60.0
     _requests: deque = field(default_factory=deque, init=False)
-    _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
+    _lock: Optional[asyncio.Lock] = field(default=None, init=False, repr=False)
+
+    def __post_init__(self):
+        # Initialize lock in __post_init__ to ensure it's created in the event loop context
+        try:
+            loop = asyncio.get_running_loop()
+            self._lock = asyncio.Lock()
+        except RuntimeError:
+            # No running loop, will be created on first use
+            pass
+
+    def _get_lock(self) -> asyncio.Lock:
+        """Get or create the lock in the current event loop context."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     async def is_allowed(self) -> tuple[bool, int, float]:
         """
         Check if request is allowed.
         Returns (allowed, remaining, retry_after)
         """
-        async with self._lock:
+        async with self._get_lock():
             now = time.time()
             cutoff = now - self.window_seconds
 

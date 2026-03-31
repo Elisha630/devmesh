@@ -11,6 +11,7 @@ Single entry point. Run this one file and:
 
 import argparse
 import asyncio
+import json
 import shutil
 import signal
 import socket
@@ -1362,18 +1363,23 @@ class DevMeshServer:
             stderr_path = stderr_file.name
             stderr_file.close()
 
+            # Open stderr file and track the handle for cleanup
+            stderr_handle = open(stderr_path, "w")
             proc = subprocess.Popen(
                 [sys.executable, str(bridge), "--tool", tool_name, "--ws", cfg.ws_url],
                 stdout=subprocess.DEVNULL,
-                stderr=open(stderr_path, "w"),
+                stderr=stderr_handle,
                 preexec_fn=None,
             )
             self.launched_procs[tool_name] = proc
 
-            # Store stderr path so we can check it later
+            # Store stderr path and handle so we can close them later
             if not hasattr(self, "_agent_stderr_paths"):
                 self._agent_stderr_paths = {}
+            if not hasattr(self, "_agent_stderr_handles"):
+                self._agent_stderr_handles = {}
             self._agent_stderr_paths[tool_name] = stderr_path
+            self._agent_stderr_handles[tool_name] = stderr_handle
 
             msg = f"Launched {tool['label']} bridge (pid {proc.pid})"
             self._audit({"event": "agent_launched", "tool": tool_name, "pid": proc.pid})
@@ -1474,6 +1480,14 @@ class DevMeshServer:
                     del self.launched_procs[tool_name]
                     if tool_name in getattr(self, "_agent_stderr_paths", {}):
                         del self._agent_stderr_paths[tool_name]
+                    # Close stderr file handle if tracked
+                    stderr_handle = getattr(self, "_agent_stderr_handles", {}).get(tool_name)
+                    if stderr_handle:
+                        try:
+                            stderr_handle.close()
+                        except Exception:
+                            pass
+                        del self._agent_stderr_handles[tool_name]
 
     # ── Background: stale lock cleanup ────────────────────────────────────
 
@@ -1673,12 +1687,43 @@ class DevMeshServer:
                 except Exception:
                     pass
             self.launched_procs.pop(tool_name, None)
+        
+        # Close all stderr file handles
+        for tool_name, handle in list(getattr(self, "_agent_stderr_handles", {}).items()):
+            try:
+                handle.close()
+            except Exception:
+                pass
+        
+        # Clean up stderr temp files
+        for tool_name, stderr_path in list(getattr(self, "_agent_stderr_paths", {}).items()):
+            try:
+                Path(stderr_path).unlink(missing_ok=True)
+            except Exception:
+                pass
 
     # ── Main ──────────────────────────────────────────────────────────────
 
     async def run(self):
-        agent_ws = websockets.serve(self.agent_handler, cfg.ws_host, cfg.ws_port)
-        dash_ws = websockets.serve(self.dash_handler, cfg.ws_host, cfg.dashboard_port)
+        # Configure WebSocket message size limits to prevent DoS
+        ws_max_size = 10 * 1024 * 1024  # 10MB max message size
+        
+        agent_ws = websockets.serve(
+            self.agent_handler, 
+            cfg.ws_host, 
+            cfg.ws_port,
+            max_size=ws_max_size,
+            ping_interval=30,
+            ping_timeout=10,
+        )
+        dash_ws = websockets.serve(
+            self.dash_handler, 
+            cfg.ws_host, 
+            cfg.dashboard_port,
+            max_size=ws_max_size,
+            ping_interval=30,
+            ping_timeout=10,
+        )
 
         dashboard_path = Path(__file__).parent / "dashboard.html"
         if not dashboard_path.exists():
