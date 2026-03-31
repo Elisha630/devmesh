@@ -86,21 +86,8 @@ RULEBOOK = {
 }
 
 
-@dataclass
+@dataclass(slots=True)
 class AgentInfo:
-    __slots__ = (
-        "model",
-        "version",
-        "capabilities",
-        "role",
-        "websocket_id",
-        "session_id",
-        "connected_at",
-        "last_seen",
-        "resource_request",
-        "status",
-        "current_task",
-    )
 
     model: str
     version: Optional[str]
@@ -115,9 +102,8 @@ class AgentInfo:
     current_task: Optional[str] = None
 
 
-@dataclass
+@dataclass(slots=True)
 class LockInfo:
-    __slots__ = ("target", "lock_type", "holder", "acquired_at", "last_heartbeat")
 
     target: str
     lock_type: LockType
@@ -126,26 +112,8 @@ class LockInfo:
     last_heartbeat: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
-@dataclass
+@dataclass(slots=True)
 class TaskInfo:
-    __slots__ = (
-        "task_id",
-        "description",
-        "file",
-        "operation",
-        "working_dir",
-        "priority",
-        "status",
-        "owner_model",
-        "depends_on",
-        "required_capabilities",
-        "critic_required",
-        "critic_model",
-        "created_by",
-        "created_at",
-        "claimed_at",
-        "completed_at",
-    )
 
     task_id: str
     description: str
@@ -165,9 +133,8 @@ class TaskInfo:
     completed_at: Optional[str] = None
 
 
-@dataclass
+@dataclass(slots=True)
 class ContextBufferEntry:
-    __slots__ = ("file_path", "content", "version", "last_updated", "last_writer", "diffs")
 
     file_path: str
     content: str

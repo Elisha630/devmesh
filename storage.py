@@ -302,6 +302,10 @@ class StorageManager:
 
     def _flush_writes(self, timeout: float = 5.0):
         """Flush all pending writes and wait for completion. Used by tests."""
+        if not self._async_writes:
+            return
+
+        assert self._stop_writer is not None
         if self._stop_writer.is_set():
             return
         # Create an event to signal when flush is complete
