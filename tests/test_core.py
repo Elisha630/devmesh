@@ -58,7 +58,8 @@ class TestStorageManager:
             "status": "queued",
             "owner_model": "test-agent",
             "working_dir": "/tmp/test",
-            "details": {"key": "value"}
+            "details": {"key": "value"},
+            "priority": 5
         }
         
         storage.upsert_task("task-001", task_data)
@@ -68,6 +69,7 @@ class TestStorageManager:
         assert retrieved is not None
         assert retrieved["description"] == "Test task"
         assert retrieved["details"]["key"] == "value"
+        assert retrieved["priority"] == 5
         storage.close()
     
     def test_log_and_get_events(self, tmp_path):
@@ -104,6 +106,89 @@ class TestStorageManager:
         recent = storage.get_recent_tasks(limit=3)
         
         assert len(recent) == 3
+        storage.close()
+    
+    def test_task_priority_ordering(self, tmp_path):
+        """Test that get_recent_tasks sorts by priority DESC, then created_at DESC."""
+        from storage import StorageManager
+        
+        db_path = tmp_path / "test.db"
+        storage = StorageManager(db_path)
+        
+        # Create tasks with different priorities
+        storage.upsert_task("low-priority-task", {
+            "description": "Low priority task",
+            "status": "queued",
+            "created_at": "2025-01-01T10:00:00",
+            "priority": 1
+        })
+        storage.upsert_task("high-priority-task", {
+            "description": "High priority task",
+            "status": "queued", 
+            "created_at": "2025-01-01T09:00:00",  # Earlier timestamp
+            "priority": 5
+        })
+        storage.upsert_task("medium-priority-task", {
+            "description": "Medium priority task",
+            "status": "queued",
+            "created_at": "2025-01-01T11:00:00",
+            "priority": 3
+        })
+        storage._flush_writes()
+        
+        recent = storage.get_recent_tasks(limit=10)
+        
+        # Should be sorted by priority DESC: 5, 3, 1
+        assert len(recent) == 3
+        assert recent[0]["priority"] == 5
+        assert recent[1]["priority"] == 3
+        assert recent[2]["priority"] == 1
+        assert recent[0]["task_id"] == "high-priority-task"
+        assert recent[1]["task_id"] == "medium-priority-task"
+        assert recent[2]["task_id"] == "low-priority-task"
+        storage.close()
+    
+    def test_task_priority_validation(self, tmp_path):
+        """Test that priority values are validated and clamped to 1-5."""
+        from storage import StorageManager
+        
+        db_path = tmp_path / "test.db"
+        storage = StorageManager(db_path)
+        
+        # Test priority too high - should clamp to valid range
+        storage.upsert_task("invalid-priority", {
+            "description": "Invalid priority task",
+            "priority": 10  # Too high
+        })
+        storage._flush_writes()
+        
+        retrieved = storage.get_task("invalid-priority")
+        assert retrieved["priority"] == 3  # Should use default
+        
+        # Test negative priority
+        storage.upsert_task("negative-priority", {
+            "description": "Negative priority task",
+            "priority": -1
+        })
+        storage._flush_writes()
+        
+        retrieved = storage.get_task("negative-priority")
+        assert retrieved["priority"] == 3  # Should use default
+        
+        # Test valid priority at boundaries
+        storage.upsert_task("min-priority", {
+            "description": "Min priority",
+            "priority": 1
+        })
+        storage.upsert_task("max-priority", {
+            "description": "Max priority",
+            "priority": 5
+        })
+        storage._flush_writes()
+        
+        assert storage.get_task("min-priority")["priority"] == 1
+        assert storage.get_task("max-priority")["priority"] == 5
+        
         storage.close()
 
 
