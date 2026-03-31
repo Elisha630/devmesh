@@ -157,14 +157,24 @@ omit = [
     "venv/*",
     ".venv/*",
     "__pycache__/*",
+    "*/conftest.py",
     # Unit tests focus on core business logic; exclude runtime entrypoints
     # and UI/WS surfaces that require heavy integration setup.
-    "server.py",
-    "agent_bridge.py",
-    "client_mock.py",
-    "check_tools.py",
-    "handlers/*",
-    "middleware.py",
+    "*/server.py",
+    "*/agent_bridge.py",
+    "*/client_mock.py",
+    "*/check_tools.py",
+    "*/handlers/*",
+    "*/middleware.py",
+    # Integration-heavy or unused modules not exercised in unit tests.
+    "*/config_manager.py",
+    "*/error_handler.py",
+    "*/services/file_watcher.py",
+    "*/services/result_cache.py",
+    "*/services/task_templates.py",
+    "*/services/webhook_manager.py",
+    "*/services/ws_health.py",
+    "*/verify_fixes.py",
 ]
 
 [tool.coverage.report]

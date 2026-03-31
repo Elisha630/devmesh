@@ -10,7 +10,6 @@ from typing import Dict, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from collections import OrderedDict
 
-
 __all__ = [
     "CacheEntry",
     "ResultCache",

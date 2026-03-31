@@ -289,6 +289,27 @@ class TestLogger:
         assert isinstance(logger, logging.Logger)
         assert logger.level == logging.DEBUG
 
+    def test_setup_logging_with_file_handler(self, tmp_path):
+        from logger import setup_logging
+
+        log_file = tmp_path / "devmesh.log"
+        logger = setup_logging(log_level="INFO", log_file=str(log_file), name="file_logger")
+        logger.info("file logging works")
+
+        for handler in logger.handlers:
+            if hasattr(handler, "flush"):
+                handler.flush()
+
+        assert log_file.exists()
+        assert "file logging works" in log_file.read_text()
+
+    def test_get_logger(self):
+        from logger import get_logger
+
+        logger = get_logger("core")
+
+        assert logger.name == "devmesh.core"
+
     def test_colored_formatter(self):
         from logger import ColoredFormatter
         import logging

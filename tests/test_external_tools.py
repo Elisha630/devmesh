@@ -275,8 +275,7 @@ class MockToolTest:
     def mock_tool_script(self, tmp_path):
         """Create a mock tool script for testing."""
         script = tmp_path / "mock_tool.py"
-        script.write_text(
-            """
+        script.write_text("""
 #!/usr/bin/env python3
 import sys
 import time
@@ -293,8 +292,7 @@ if "--help" in sys.argv:
 print("Processing...")
 time.sleep(0.1)
 print("Done")
-"""
-        )
+""")
         script.chmod(0o755)
         return script
 

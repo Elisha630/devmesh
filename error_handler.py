@@ -14,7 +14,6 @@ from enum import Enum
 
 import orjson
 
-
 __all__ = [
     "ErrorSeverity",
     "ErrorContext",

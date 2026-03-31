@@ -178,8 +178,7 @@ class StorageManager:
             cur = conn.cursor()
 
             # Agents table
-            cur.execute(
-                """
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS agents (
                     model_id TEXT PRIMARY KEY,
                     session_id TEXT,
@@ -190,12 +189,10 @@ class StorageManager:
                     last_seen TEXT,
                     hardware_usage JSON
                 )
-            """
-            )
+            """)
 
             # Tasks table
-            cur.execute(
-                """
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS tasks (
                     task_id TEXT PRIMARY KEY,
                     description TEXT,
@@ -209,8 +206,7 @@ class StorageManager:
                     details JSON,
                     priority INTEGER DEFAULT 3
                 )
-            """
-            )
+            """)
 
             # Migrate: add priority column if it doesn't exist (for existing databases)
             try:
@@ -220,8 +216,7 @@ class StorageManager:
                 log.info("Migrated tasks table: added priority column")
 
             # Projects table (New in Phase 1 upgrade)
-            cur.execute(
-                """
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS projects (
                     project_id TEXT PRIMARY KEY,
                     name TEXT,
@@ -230,12 +225,10 @@ class StorageManager:
                     created_at TEXT,
                     last_used_at TEXT
                 )
-            """
-            )
+            """)
 
             # Audit Log table
-            cur.execute(
-                """
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS audit_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp TEXT,
@@ -243,22 +236,18 @@ class StorageManager:
                     model_id TEXT,
                     details JSON
                 )
-            """
-            )
+            """)
 
             # KV Store for global state (config, rulebook version, etc.)
-            cur.execute(
-                """
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS kv_store (
                     key TEXT PRIMARY KEY,
                     value JSON
                 )
-            """
-            )
+            """)
 
             # Context RAG tables (Phase 3 foundation)
-            cur.execute(
-                """
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS context_items (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     key TEXT,
@@ -268,8 +257,7 @@ class StorageManager:
                     timestamp TEXT,
                     project_id TEXT
                 )
-            """
-            )
+            """)
 
             # Performance indexes for frequent lookups.
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC)")
