@@ -249,16 +249,33 @@ class StorageManager:
         # Close all pooled connections
         self._pool.close_all()
 
+    def _flush_writes(self, timeout: float = 5.0):
+        """Flush all pending writes and wait for completion. Used by tests."""
+        if self._stop_writer.is_set():
+            return
+        # Create an event to signal when flush is complete
+        flush_event = threading.Event()
+        
+        def _flush_and_signal(conn):
+            flush_event.set()
+        
+        # Queue the flush signal operation
+        self._queue_write(_flush_and_signal)
+        
+        # Wait for the flush to complete
+        flush_event.wait(timeout=timeout)
+
     # ── Agent Methods ────────────────────────────────────────────────────────
 
     def upsert_agent(self, model_id: str, data: Dict):
+        # Fetch existing data BEFORE queuing to avoid race condition with writer thread
+        existing = self.get_agent(model_id)
+        if existing:
+            final_data = {**existing, **data}
+        else:
+            final_data = data
+
         def _do_upsert(conn):
-            existing = self.get_agent(model_id)
-            if existing:
-                final_data = {**existing, **data}
-            else:
-                final_data = data
-            
             conn.execute("""
                 INSERT OR REPLACE INTO agents (
                     model_id, session_id, role, status, is_active, 
@@ -304,13 +321,14 @@ class StorageManager:
     # ── Task Methods ─────────────────────────────────────────────────────────
 
     def upsert_task(self, task_id: str, data: Dict):
-        def _do_upsert(conn):
-            existing = self.get_task(task_id)
-            if existing:
-                final_data = {**existing, **data}
-            else:
-                final_data = data
+        # Fetch existing data BEFORE queuing to avoid race condition with writer thread
+        existing = self.get_task(task_id)
+        if existing:
+            final_data = {**existing, **data}
+        else:
+            final_data = data
 
+        def _do_upsert(conn):
             conn.execute("""
                 INSERT OR REPLACE INTO tasks (
                     task_id, description, status, owner_model, working_dir, 

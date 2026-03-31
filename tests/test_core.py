@@ -39,6 +39,7 @@ class TestStorageManager:
         }
         
         storage.upsert_agent("test-agent", agent_data)
+        storage._flush_writes()  # Wait for async write to complete
         retrieved = storage.get_agent("test-agent")
         
         assert retrieved is not None
@@ -61,6 +62,7 @@ class TestStorageManager:
         }
         
         storage.upsert_task("task-001", task_data)
+        storage._flush_writes()  # Wait for async write to complete
         retrieved = storage.get_task("task-001")
         
         assert retrieved is not None
@@ -75,6 +77,7 @@ class TestStorageManager:
         storage = StorageManager(db_path)
         
         storage.log_event("test_event", "test-agent", {"data": "test"})
+        storage._flush_writes()  # Wait for async write to complete
         events = storage.get_recent_events(limit=10)
         
         assert len(events) > 0
@@ -95,6 +98,7 @@ class TestStorageManager:
                 "status": "completed",
                 "created_at": datetime.now().isoformat()
             })
+            storage._flush_writes()  # Wait for async write to complete
             time.sleep(0.01)  # Ensure different timestamps
         
         recent = storage.get_recent_tasks(limit=3)
