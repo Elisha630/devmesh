@@ -203,9 +203,17 @@ class StorageManager:
                     created_at TEXT,
                     completed_at TEXT,
                     result_summary TEXT,
-                    details JSON
+                    details JSON,
+                    priority INTEGER DEFAULT 3
                 )
             """)
+            
+            # Migrate: add priority column if it doesn't exist (for existing databases)
+            try:
+                cur.execute("SELECT priority FROM tasks LIMIT 1")
+            except sqlite3.OperationalError:
+                cur.execute("ALTER TABLE tasks ADD COLUMN priority INTEGER DEFAULT 3")
+                log.info("Migrated tasks table: added priority column")
 
             # Projects table (New in Phase 1 upgrade)
             cur.execute("""
@@ -253,6 +261,7 @@ class StorageManager:
 
             # Performance indexes for frequent lookups.
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority DESC)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp DESC)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_agents_last_seen ON agents(last_seen DESC)")
@@ -275,16 +284,33 @@ class StorageManager:
         # Close all pooled connections
         self._pool.close_all()
 
+    def _flush_writes(self, timeout: float = 5.0):
+        """Flush all pending writes and wait for completion. Used by tests."""
+        if self._stop_writer.is_set():
+            return
+        # Create an event to signal when flush is complete
+        flush_event = threading.Event()
+        
+        def _flush_and_signal(conn):
+            flush_event.set()
+        
+        # Queue the flush signal operation
+        self._queue_write(_flush_and_signal)
+        
+        # Wait for the flush to complete
+        flush_event.wait(timeout=timeout)
+
     # ── Agent Methods ────────────────────────────────────────────────────────
 
     def upsert_agent(self, model_id: str, data: Dict):
+        # Fetch existing data BEFORE queuing to avoid race condition with writer thread
+        existing = self.get_agent(model_id)
+        if existing:
+            final_data = {**existing, **data}
+        else:
+            final_data = data
+
         def _do_upsert(conn):
-            existing = self.get_agent(model_id)
-            if existing:
-                final_data = {**existing, **data}
-            else:
-                final_data = data
-            
             conn.execute("""
                 INSERT OR REPLACE INTO agents (
                     model_id, session_id, role, status, is_active, 
@@ -330,18 +356,28 @@ class StorageManager:
     # ── Task Methods ─────────────────────────────────────────────────────────
 
     def upsert_task(self, task_id: str, data: Dict):
-        def _do_upsert(conn):
-            existing = self.get_task(task_id)
-            if existing:
-                final_data = {**existing, **data}
-            else:
-                final_data = data
+        # Fetch existing data BEFORE queuing to avoid race condition with writer thread
+        existing = self.get_task(task_id)
+        if existing:
+            final_data = {**existing, **data}
+        else:
+            final_data = data
 
+        # Validate and normalize priority (1-5, default 3)
+        priority = final_data.get("priority", 3)
+        try:
+            priority = int(priority)
+            if not (1 <= priority <= 5):
+                priority = 3
+        except (TypeError, ValueError):
+            priority = 3
+
+        def _do_upsert(conn):
             conn.execute("""
                 INSERT OR REPLACE INTO tasks (
                     task_id, description, status, owner_model, working_dir, 
-                    file_target, created_at, completed_at, result_summary, details
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    file_target, created_at, completed_at, result_summary, details, priority
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 task_id,
                 final_data.get("description", ""),
@@ -352,7 +388,12 @@ class StorageManager:
                 final_data.get("created_at", existing["created_at"] if existing else datetime.now().isoformat()),
                 final_data.get("completed_at"),
                 final_data.get("result_summary"),
+<<<<<<< HEAD
                 orjson.dumps(final_data.get("details", {})).decode('utf-8')
+=======
+                json.dumps(final_data.get("details", {})),
+                priority
+>>>>>>> 965ee552306782a8c378ba4c22e29bfad0b33338
             ))
         
         self._queue_write(_do_upsert)
@@ -372,7 +413,8 @@ class StorageManager:
     def get_recent_tasks(self, limit: int = 50) -> List[Dict]:
         with self._get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?", (limit,))
+            # Sort by priority DESC, then created_at DESC
+            cur.execute("SELECT * FROM tasks ORDER BY priority DESC, created_at DESC LIMIT ?", (limit,))
             tasks = []
             for row in cur.fetchall():
                 d = dict(row)

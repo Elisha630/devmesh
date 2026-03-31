@@ -458,6 +458,8 @@ class AgentBridge:
         """Main loop with reconnection logic."""
         cfg = get_agent_config(tool_name=self.tool_name, ws_url=self.ws_url)
         retry_delay = 1
+        max_retries = 10
+        retry_count = 0
         
         while True:
             self.log.info(f"Connecting to DevMesh at {self.ws_url}…")
@@ -465,7 +467,8 @@ class AgentBridge:
                 async with websockets.connect(self.ws_url, ping_interval=cfg.ping_interval_sec) as ws:
                     self.ws = ws
                     self.log.info("Connected ✓")
-                    retry_delay = 1 # Reset on success
+                    retry_delay = 1  # Reset on success
+                    retry_count = 0  # Reset retry counter on success
 
                     # Register (including session_id if we have one)
                     await self._send({
@@ -499,9 +502,15 @@ class AgentBridge:
                             pass
                         except Exception as e:
                             raise e
-            except (ConnectionRefusedError, websockets.exceptions.ConnectionClosed):
-                self.log.warning(f"Connection lost. Retrying in {retry_delay}s...")
+            except (ConnectionRefusedError, websockets.exceptions.ConnectionClosed) as e:
+                retry_count += 1
+                if retry_count > max_retries:
+                    self.log.error(f"Max retries ({max_retries}) exceeded. Giving up.")
+                    raise RuntimeError(f"Failed to connect after {max_retries} attempts") from e
+                
+                self.log.warning(f"Connection lost (attempt {retry_count}/{max_retries}). Retrying in {retry_delay}s...")
                 await asyncio.sleep(retry_delay)
+                # Exponential backoff: double the delay, cap at 60 seconds
                 retry_delay = min(retry_delay * 2, 60)
             except Exception as e:
                 self.log.error(f"Bridge error: {e}")
